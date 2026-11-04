@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Whole-ROM static scan driver (no gameplay).
+
+Runs `nds_recompile --static-scan` over every DQ9 code image:
+  * ARM9 main (0x02000000), seeded only from the ROM-header entry;
+  * every ARM9 overlay below 0x02400000, seeded from its static-init table;
+  * ARM7 (0x02380000), seeded only from the ROM-header entry.
+
+Images call into each other (overlay -> main, overlay -> overlay, main ->
+ITCM), and a direct call into another image is invisible to that image's
+own walk. Each pass exports its out-of-image call targets
+(`--external-targets-out`) and the next pass hands every other image the
+union as `--extra-candidates`. Candidates are decode-validated in the
+receiving image, which is what keeps a target in a shared overlay window
+from being seeded into an overlay where it is not code. Passes repeat until
+the exchanged set stops growing.
+
+Usage:
+  static_scan_dq9.py --recompiler build/ndsrecomp-recompiler/nds_recompile \\
+      --inputs generated/inputs --out <dir> [--passes 4] [--keep-seeds]
+
+Output per image: <out>/<image>/{<image>.toml, gen/<bank>_dispatch.c,
+finder.log, external.txt}. Use tools/score_static_scan.py on the dispatch
+files (run without --keep-seeds to measure recall from the ROM entry alone).
+
+Bank inputs (consumed by CMake through tools/gen_bank.py):
+  <out>/<image>.toml             finder config (seeds kept with --keep-seeds)
+  <out>/<image>.candidates.txt   converged cross-image call targets
+  <out>/manifest.json            per-image bin/config/candidates/function count
+These are rewritten only when their content changes, so an unchanged scan
+leaves every downstream bank up to date.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import struct
+import subprocess
+import sys
+from pathlib import Path
+
+DS_MAIN_RAM_LIMIT = 0x02400000
+
+
+def strip_seeds(toml_text: str) -> str:
+    """Keep [program]/[identity]/... and only the first (ROM header) entry."""
+    parts = toml_text.split("[[entry_point]]")
+    return parts[0] + ("[[entry_point]]" + parts[1] if len(parts) > 1 else "")
+
+
+def overlay_config(toml_text: str, data: bytes, base: int) -> str:
+    si = re.search(r"static_init_start = (0x[0-9a-fA-F]+)", toml_text)
+    se = re.search(r"static_init_end = (0x[0-9a-fA-F]+)", toml_text)
+    entries = []
+    if si and se:
+        lo, hi = int(si.group(1), 16), int(se.group(1), 16)
+        for a in range(lo, hi, 4):
+            off = a - base
+            if 0 <= off <= len(data) - 4:
+                w = struct.unpack_from("<I", data, off)[0]
+                if w and base <= (w & ~1) < base + len(data):
+                    entries.append(w)
+    text = toml_text
+    if entries:
+        first = entries[0] & ~1
+        text = re.sub(r"entry_pc = 0x[0-9a-fA-F]+", f"entry_pc = 0x{first:08x}", text)
+    for w in entries:
+        mode = "thumb" if w & 1 else "arm"
+        text += (f'\n[[entry_point]]\naddr = 0x{w & ~1:08x}\nmode = "{mode}"\n'
+                 f'name = "sinit_{w & ~1:08x}"\nkind = "static_init"\n')
+    return text, len(entries)
+
+
+def write_if_changed(path: Path, text: str) -> None:
+    if not path.exists() or path.read_text() != text:
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(text)
+        tmp.replace(path)
+
+
+def run_image(recomp: Path, cfg: Path, binp: Path, out: Path, bank: str,
+              candidates: Path | None) -> set[tuple[int, str]]:
+    gen = out / "gen"
+    gen.mkdir(parents=True, exist_ok=True)
+    ext = out / "external.txt"
+    cmd = [str(recomp), "--config", str(cfg), "--bin", str(binp),
+           "--out", str(gen), "--bank", bank, "--static-scan",
+           "--external-targets-out", str(ext), "--dispatch-only"]
+    if candidates is not None:
+        cmd += ["--extra-candidates", str(candidates)]
+    with open(out / "finder.log", "w") as log:
+        rc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT).returncode
+    if rc != 0:
+        raise SystemExit(f"{bank}: nds_recompile failed ({rc}); see {out/'finder.log'}")
+    got = set()
+    for line in ext.read_text().splitlines():
+        a, m, *_ = line.split()
+        got.add((int(a, 16), m))
+    return got
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--recompiler", type=Path, required=True)
+    ap.add_argument("--inputs", type=Path, required=True)
+    ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--passes", type=int, default=4)
+    ap.add_argument("--keep-seeds", action="store_true",
+                    help="keep the main images' coverage seeds (bank build); "
+                         "default strips them to measure static recall")
+    args = ap.parse_args()
+    inp = args.inputs.resolve()
+    out = args.out.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+
+    images = []  # (name, cfg_path, bin_path, cpu)
+    for cpu in ("arm9", "arm7"):
+        d = out / cpu
+        d.mkdir(exist_ok=True)
+        cfg = d / f"{cpu}.toml"
+        text = (inp / f"{cpu}.toml").read_text()
+        cfg.write_text(text if args.keep_seeds else strip_seeds(text))
+        images.append((cpu, cfg, inp / f"{cpu}.bin", cpu))
+    for ov in json.loads((inp / "overlays.json").read_text()):
+        base = int(ov["load_address"], 16)
+        if base >= DS_MAIN_RAM_LIMIT:
+            continue
+        name = f"ov{ov['id']:03d}"
+        binp = inp / "overlays" / ov["file"]
+        src = (inp / "overlays" / ov["file"].replace(".bin", ".toml")).read_text()
+        text, n = overlay_config(src, binp.read_bytes(), base)
+        d = out / name
+        d.mkdir(exist_ok=True)
+        cfg = d / f"{name}.toml"
+        cfg.write_text(text)
+        images.append((name, cfg, binp, "arm9"))
+
+    exported: dict[str, set] = {}
+    cand_text: dict[str, str] = {}
+    prev_total = -1
+    converged = False
+    for p in range(args.passes):
+        for name, cfg, binp, cpu in images:
+            others = set()
+            for other, s in exported.items():
+                if other != name and (other == "arm7") == (cpu == "arm7"):
+                    others |= s
+            cand_text[name] = "".join(f"0x{a:08X} {m}\n" for a, m in sorted(others))
+            cand = out / name / "candidates.txt"
+            cand.write_text(cand_text[name])
+            exported[name] = run_image(args.recompiler, cfg, binp, out / name,
+                                       f"scan_{name}", cand)
+        total = sum(len(s) for s in exported.values())
+        print(f"[static-scan] pass {p}: exported targets={total}")
+        if total == prev_total:
+            converged = True
+            break
+        prev_total = total
+    if not converged:
+        print(f"[static-scan] WARNING: not converged after {args.passes} passes")
+    manifest = []
+    for name, cfg, binp, cpu in images:
+        log = (out / name / "finder.log").read_text()
+        m = re.search(r"\[finder\] functions=(\d+).*undefined=(\d+)", log)
+        s = re.search(r"\[finder\] static_scan .*", log)
+        print(f"  {name:6s} functions={m.group(1) if m else '?':>6s} "
+              f"undefined={m.group(2) if m else '?':>4s}  {s.group(0)[17:] if s else ''}")
+        write_if_changed(out / f"{name}.toml", cfg.read_text())
+        write_if_changed(out / f"{name}.candidates.txt", cand_text[name])
+        manifest.append({
+            "image": name, "cpu": cpu, "bin": str(binp),
+            "config": str(out / f"{name}.toml"),
+            "candidates": str(out / f"{name}.candidates.txt"),
+            "functions": int(m.group(1)) if m else None,
+            "undefined": int(m.group(2)) if m else None,
+            # Content hashes make the manifest change whenever any bank input
+            # does, so build steps that depend on it alone stay correct.
+            "config_sha1": hashlib.sha1(cfg.read_bytes()).hexdigest(),
+            "candidates_sha1": hashlib.sha1(cand_text[name].encode()).hexdigest(),
+        })
+    write_if_changed(out / "manifest.json", json.dumps(
+        {"keep_seeds": args.keep_seeds, "converged": converged,
+         "images": manifest}, indent=1) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
