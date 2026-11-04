@@ -9,7 +9,12 @@ rom_size = 0x10000000
 sha1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 
 [display]
-screen_layout = "separate"
+# One window showing only the DS main screen (engine A's LCD). Backtick
+# shows the other screen; holding Tab (the virtual stylus) peeks at the
+# bottom one while the main screen is on top.
+screen_layout = "single"     # single | stacked | separate
+window_mode = "letterbox"    # letterbox | stretch | original (1:1)
+scaling = "bilinear"         # bilinear | integer (pixel-perfect)
 
 [system]
 startup_mode = "automatic"
