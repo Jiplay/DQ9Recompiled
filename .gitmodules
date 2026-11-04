@@ -1,0 +1,4 @@
+[submodule "ndsrecomp"]
+	path = ndsrecomp
+	url = git@github.com:birabittoh/ndsrecomp.git
+	branch = dq9

@@ -1,0 +1,11 @@
+# User-owned Nintendo DS images and ROM-derived outputs.
+*.nds
+/generated/
+/extracted/
+/.venv/
+/build/
+/build-*/
+/saves/
+/captures/
+*.sav
+*.log

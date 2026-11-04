@@ -1,0 +1,38 @@
+[game]
+name = "Dragon Quest IX: Sentinels of the Starry Skies"
+id = "YDQP"
+region = "Europe"
+revision = 0
+status = "bring-up scaffold: interpreter boot only, no coverage banks yet"
+rom = "dq9.nds"
+rom_size = 0x10000000
+sha1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
+
+[display]
+screen_layout = "separate"
+
+[system]
+startup_mode = "automatic"
+
+# TODO(bring-up): declare the cartridge save device once confirmed from a
+# trusted cartridge database (melonDS ROMList entry YDQP). Not guessed here.
+# [cartridge]
+# save_type = "flash"
+# save_size = 0
+
+[arm9]
+rom_offset = 0x00004000
+entry_pc = 0x02000800
+load_address = 0x02000000
+compressed_size = 0x0009bd08
+decompressed_size = 0x000f4618
+overlay_count = 35
+
+[arm7]
+rom_offset = 0x001e2400
+entry_pc = 0x02380000
+load_address = 0x02380000
+size = 0x00028fc4
+
+[framework]
+path = "ndsrecomp"
