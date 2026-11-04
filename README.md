@@ -19,7 +19,8 @@ generated code is committed.
 - Banks: ARM9 main, ARM7 and 31 ARM9 overlays (`DQ9_BANKS` in
   `CMakeLists.txt`). Every row is gated by the ROM SHA-1 and by live-byte
   validation; the Tier-3 interpreter remains the fallback.
-- Not done: save type (`[cartridge]` in `game.toml` is a TODO until confirmed).
+- Save: 64 KiB EEPROM (`[cartridge]` in `game.toml`), raw 65,536-byte
+  `.sav` images, interchangeable with emulator saves that have no footer.
   BIOS/firmware dumps go in `ndsrecomp/bios`.
 
 ## Build

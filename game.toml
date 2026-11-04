@@ -18,11 +18,12 @@ startup_mode = "automatic"
 # firmware dump's own). Override per run with NDS_LANGUAGE or --language.
 language = "english"
 
-# TODO(bring-up): declare the cartridge save device once confirmed from a
-# trusted cartridge database (melonDS ROMList entry YDQP). Not guessed here.
-# [cartridge]
-# save_type = "flash"
-# save_size = 0
+# 64 KiB EEPROM, confirmed from a working emulator save of YDQP (a raw
+# 65,536-byte image starting "DRAGON QUEST IX"). The runner reads and writes
+# the same raw format (dq9.sav next to the ROM, or --save-path).
+[cartridge]
+save_type = "eeprom"
+save_size = 65536
 
 [arm9]
 rom_offset = 0x00004000
