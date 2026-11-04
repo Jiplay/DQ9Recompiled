@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import struct
 from pathlib import Path
 
 try:
@@ -132,6 +133,28 @@ def write_overlay_config(
 DS_MAIN_RAM_LIMIT = 0x02400000
 
 
+MODULE_PARAMS_MAGIC = struct.pack("<II", 0xDEC00621, 0x2106C0DE)
+MODULE_PARAMS_MAGIC_OFFSET = 0x1C
+MODULE_PARAMS_COMPRESSED_END = 0x14
+
+
+def clear_compressed_static_end(arm9: bytes) -> bytes:
+    """Zero _start_ModuleParams.compressed_static_end after decompression.
+
+    The game's own decompressor clears this field in RAM once it has expanded
+    the static module. Leaving it set makes crt0 "decompress" plaintext again,
+    which breaks the recompiler's sandboxed relocation scan (no ITCM/autoload
+    copies get proven).
+    """
+    hit = arm9.find(MODULE_PARAMS_MAGIC)
+    if hit < MODULE_PARAMS_MAGIC_OFFSET or arm9.find(MODULE_PARAMS_MAGIC, hit + 1) != -1:
+        raise SystemExit("ARM9 _start_ModuleParams not found exactly once")
+    field = hit - MODULE_PARAMS_MAGIC_OFFSET + MODULE_PARAMS_COMPRESSED_END
+    patched = bytearray(arm9)
+    patched[field:field + 4] = b"\0\0\0\0"
+    return bytes(patched)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rom", type=Path, required=True)
@@ -164,6 +187,8 @@ def main() -> int:
     arm9 = code_compression.decompress(arm9_compressed)
     if len(arm9) < len(arm9_compressed):
         arm9 = arm9_compressed
+    else:
+        arm9 = clear_compressed_static_end(arm9)
     arm7 = bytes(rom.arm7)
 
     out = args.out.resolve()
