@@ -9,3 +9,6 @@
 /captures/
 *.sav
 *.log
+
+# Runner performance logs (machine-specific).
+performance-*.jsonl
