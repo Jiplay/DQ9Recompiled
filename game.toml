@@ -13,6 +13,10 @@ screen_layout = "separate"
 
 [system]
 startup_mode = "automatic"
+# Firmware user language, which YDQP uses to pick its text language:
+# english, french, german, italian or spanish (or "preserve" to keep the
+# firmware dump's own). Override per run with NDS_LANGUAGE or --language.
+language = "english"
 
 # TODO(bring-up): declare the cartridge save device once confirmed from a
 # trusted cartridge database (melonDS ROMList entry YDQP). Not guessed here.
