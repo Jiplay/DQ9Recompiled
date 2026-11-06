@@ -28,6 +28,11 @@ startup_mode = "automatic"
 # firmware dump's own). Override per run with NDS_LANGUAGE or --language.
 language = "english"
 
+[controls]
+# Face buttons by position, as on a DS: the pad's bottom button is DS B and
+# its right button DS A. "labels" matches the names instead (pad A is DS A).
+gamepad_layout = "positional"
+
 # 64 KiB EEPROM, confirmed from a working emulator save of YDQP (a raw
 # 65,536-byte image starting "DRAGON QUEST IX"). The runner reads and writes
 # the same raw format (dq9.sav next to the ROM, or --save-path).
