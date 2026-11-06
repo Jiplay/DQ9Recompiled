@@ -39,13 +39,37 @@ Then build the runner against the bank directory:
 
     cmake -G Ninja -S ndsrecomp/runner -B build-runner -DCMAKE_BUILD_TYPE=Release \
         -DNDS_BOOTSTRAP_FIRMWARE=ON -DNDS_TITLE_BANK_DIR=$PWD/generated/recomp \
-        -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1
+        -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
+        -DNDS_TITLE_CONFIG=$PWD/game.toml
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
 7 GB host. Tier-3 coverage manifests can still be merged into
 `coverage/entry-points.json` (`tools/promote_main_coverage.py`); the bank
 build keeps those seeds on top of the static scan.
+
+## Play
+    ./build-runner/nds_runner
+
+The first launch asks for the ROM, then remembers it. `game.toml` is built
+into the executable, so it runs from any directory. Everything else lives in
+one folder:
+
+| Platform | Folder |
+| --- | --- |
+| Linux | `~/.local/share/DQ9Recomp` (`$XDG_DATA_HOME`) |
+| Windows | `Documents\DQ9Recomp` |
+| macOS | `~/Library/Application Support/DQ9Recomp` |
+| Any | next to the executable, if a `portable.txt` file is there |
+
+`settings.toml` holds the settings and is meant to be edited by hand; the Esc
+menu writes its changes back to it, keeping your comments. The save is
+`saves/DQ9Recomp.sav`, and savestates, performance logs and coverage manifests
+sit alongside it. BIOS dumps are found in `bios/` there, in `bios/` next to the
+executable, or in `ndsrecomp/bios`; otherwise the game asks for the folder.
+
+Any other command line (`nds_runner <bios dir> --rom ...`) behaves as before
+and ignores `settings.toml`.
 
 Recall can be measured offline with
 `tools/static_scan_dq9.py --out <dir>` (seeds stripped) followed by

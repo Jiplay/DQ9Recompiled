@@ -1,5 +1,7 @@
 [game]
 name = "Dragon Quest IX: Sentinels of the Starry Skies"
+# Data directory name: settings, saves and savestates live there.
+app_name = "DQ9Recomp"
 id = "YDQP"
 region = "Europe"
 revision = 0
@@ -35,7 +37,7 @@ gamepad_layout = "positional"
 
 # 64 KiB EEPROM, confirmed from a working emulator save of YDQP (a raw
 # 65,536-byte image starting "DRAGON QUEST IX"). The runner reads and writes
-# the same raw format (dq9.sav next to the ROM, or --save-path).
+# the same raw format.
 [cartridge]
 save_type = "eeprom"
 save_size = 65536
