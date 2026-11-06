@@ -12,3 +12,5 @@
 
 # Runner performance logs (machine-specific).
 performance-*.jsonl
+
+__pycache__/

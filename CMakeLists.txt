@@ -48,7 +48,8 @@ add_custom_command(
     OUTPUT ${DQ9_PREP_OUTPUTS}
     COMMAND "${DQ9_PYTHON}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_dq9.py"
             --rom "${DQ9_ROM}" --out "${DQ9_INPUT_DIR}" ${_cov_arg}
-    DEPENDS "${DQ9_ROM}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_dq9.py" ${_cov_dep}
+    DEPENDS "${DQ9_ROM}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_dq9.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/ov029_unprotect.py" ${_cov_dep}
     COMMENT "Verifying YDQP and preparing main/overlay code images")
 add_custom_target(dq9_prepare DEPENDS ${DQ9_PREP_OUTPUTS})
 
@@ -69,13 +70,17 @@ add_custom_command(
     COMMENT "Static whole-ROM scan of YDQP (main, ARM7, overlays)")
 add_custom_target(dq9_analysis DEPENDS "${DQ9_ANALYSIS_MANIFEST}")
 
-# Banks as "<bank>:<shards>:<image>". <image> names the analysis config
-# (generated/analysis/<image>.toml) and its code image. Shard counts are
+# Banks as "<bank>:<shards>:<image>[:separate]". <image> names the analysis
+# config (generated/analysis/<image>.toml) and its code image. Shard counts are
 # ~2,000 scanned functions per shard (static-scan report, 2026-11-04), at
 # least 2. Overlays the scan finds no code in (ov007, ov018, ov022, ov032:
 # one function each, no static-init table) and DSi-only overlays at or above
 # 0x02400000 get no bank. Overlays sharing a load address are safe: every
 # row is gated by --validate-live-bytes.
+#
+# "separate" keeps every function validating on its own instead of coalescing
+# neighbours, for code whose surroundings change while it runs: ov029 decrypts
+# and re-encrypts one region at a time.
 set(DQ9_BANKS
     "dq9_arm9:24:arm9"
     "dq9_arm7:4:arm7"
@@ -87,7 +92,8 @@ set(DQ9_BANKS
     "dq9_arm9_ov016:2:ov016" "dq9_arm9_ov017:9:ov017" "dq9_arm9_ov019:2:ov019"
     "dq9_arm9_ov020:2:ov020" "dq9_arm9_ov021:2:ov021" "dq9_arm9_ov023:4:ov023"
     "dq9_arm9_ov024:4:ov024" "dq9_arm9_ov025:3:ov025" "dq9_arm9_ov026:2:ov026"
-    "dq9_arm9_ov027:2:ov027" "dq9_arm9_ov028:2:ov028" "dq9_arm9_ov029:2:ov029"
+    "dq9_arm9_ov027:2:ov027" "dq9_arm9_ov028:2:ov028"
+    "dq9_arm9_ov029:2:ov029:separate"
     "dq9_arm9_ov030:2:ov030" "dq9_arm9_ov031:8:ov031" "dq9_arm9_ov033:2:ov033"
     "dq9_arm9_ov034:2:ov034")
 # Superblocks (--coalesce-fallthroughs): adjacent functions inside one 4 KiB
@@ -109,6 +115,11 @@ foreach(_spec IN LISTS DQ9_BANKS)
     list(GET _spec 0 _bank)
     list(GET _spec 1 _shards)
     list(GET _spec 2 _image)
+    set(_merge --coalesce-fallthroughs)
+    list(LENGTH _spec _spec_fields)
+    if(_spec_fields GREATER 3)
+        set(_merge)
+    endif()
     if(_image MATCHES "^ov([0-9]+)$")
         set(_bin "${DQ9_INPUT_DIR}/overlays/arm9_overlay_${CMAKE_MATCH_1}.bin")
     else()
@@ -148,7 +159,7 @@ foreach(_spec IN LISTS DQ9_BANKS)
                 --stable-address-shards
                 --max-function-bytes 512
                 --validate-live-bytes
-                --coalesce-fallthroughs
+                ${_merge}
                 ${_preceding_args}
         DEPENDS nds_recompile "${DQ9_ANALYSIS_MANIFEST}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_bank.py"

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import struct
+import sys
 from pathlib import Path
 
 try:
@@ -16,6 +17,10 @@ except ImportError as exc:
     raise SystemExit(
         "ndspy 4.2.0 is required; install requirements.txt into .venv"
     ) from exc
+
+# prepare runs with `python -I`, which leaves the script directory off the path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ov029_unprotect  # noqa: E402
 
 
 EXPECTED_ROM_SHA1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
@@ -93,6 +98,8 @@ def write_overlay_config(
     bss_size: int,
     static_init_start: int,
     static_init_end: int,
+    entry_points: list[int] = (),
+    data_ranges: list[tuple[int, int]] = (),
 ) -> None:
     """Emit a recompiler seed config for one ARM9 overlay unit.
 
@@ -125,6 +132,13 @@ def write_overlay_config(
         f"static_init_end = 0x{static_init_end:08x}",
         "",
     ]
+    for start, end in data_ranges:
+        lines += ["[[data_range]]", f"start = 0x{start:08x}",
+                  f"end = 0x{end:08x}", ""]
+    for addr in entry_points:
+        lines += ["[[entry_point]]", f"addr = 0x{addr:08x}", 'mode = "arm"',
+                  f"name = {toml_string(f'ov{overlay_id:03d}_{addr:08x}')}",
+                  'kind = "protected_code"', ""]
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
@@ -209,13 +223,23 @@ def main() -> int:
         if len(data) != int(ov.ramSize):
             raise SystemExit(f"overlay {oid} length mismatch")
         fn = f"arm9_overlay_{oid:03d}.bin"
+        # A bank is built from the bytes that execute. For the protected
+        # overlay those are not the ROM's, and the image here says so.
+        entries: list[int] = []
+        ranges: list[tuple[int, int]] = []
+        if oid == ov029_unprotect.OVERLAY_ID:
+            data, report = ov029_unprotect.unprotect(data)
+            entries, ranges = ov029_unprotect.bank_inputs(report)
+            print(f"overlay {oid}: decrypted {len(report['stubs'])} protected "
+                  f"functions and {len(report['stage1_regions'])} stage 1 regions")
         (overlays_dir / fn).write_bytes(data)
         if int(ov.ramAddress) < DS_MAIN_RAM_LIMIT:
             write_overlay_config(overlays_dir / f"arm9_overlay_{oid:03d}.toml",
                 title="Dragon Quest IX (Europe)", program_id="dq9_ydqp_arm9",
                 overlay_id=oid, load_address=int(ov.ramAddress), binary=data,
                 bss_size=int(ov.bssSize), static_init_start=int(ov.staticInitStart),
-                static_init_end=int(ov.staticInitEnd))
+                static_init_end=int(ov.staticInitEnd),
+                entry_points=entries, data_ranges=ranges)
         manifest.append({"id": oid, "file": fn, "file_id": int(ov.fileID),
             "load_address": f"0x{int(ov.ramAddress):08x}", "size": int(ov.ramSize),
             "bss_size": int(ov.bssSize), "compressed_in_rom": bool(ov.compressed),
