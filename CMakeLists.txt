@@ -53,6 +53,42 @@ add_custom_command(
     COMMENT "Verifying YDQP and preparing main/overlay code images")
 add_custom_target(dq9_prepare DEPENDS ${DQ9_PREP_OUTPUTS})
 
+# The firmware's boot code runs before the cartridge does. The dumps it comes
+# from are the user's own, so its banks exist only when they are present, and
+# are generated from whichever dump the runner will boot. Decoding takes
+# milliseconds and decides which parts exist, so it happens at configure time.
+set(DQ9_FIRMWARE "${NDSRECOMP_ROOT}/bios/firmware.bin" CACHE FILEPATH
+    "Firmware dump to generate boot banks from")
+set(DQ9_BIOS7 "${NDSRECOMP_ROOT}/bios/biosnds7.rom" CACHE FILEPATH
+    "ARM7 BIOS holding the key that decodes the firmware")
+set(DQ9_FIRMWARE_DIR "${DQ9_INPUT_DIR}/firmware")
+set(DQ9_FIRMWARE_PARTS)
+set(_fw_dep)
+if(EXISTS "${DQ9_FIRMWARE}" AND EXISTS "${DQ9_BIOS7}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${DQ9_FIRMWARE}" "${DQ9_BIOS7}"
+        "${NDSRECOMP_ROOT}/tools/fw_extract.py")
+    execute_process(
+        COMMAND "${DQ9_PYTHON}" -I "${NDSRECOMP_ROOT}/tools/fw_extract.py"
+                "${DQ9_FIRMWARE}" "${DQ9_BIOS7}" --out "${DQ9_FIRMWARE_DIR}"
+        RESULT_VARIABLE _fw_result OUTPUT_VARIABLE _fw_output
+        ERROR_VARIABLE _fw_output)
+    if(NOT _fw_result EQUAL 0)
+        message(FATAL_ERROR "Firmware decode failed:\n${_fw_output}")
+    endif()
+    file(READ "${DQ9_FIRMWARE_DIR}/parts.json" _fw_json)
+    string(JSON _fw_count LENGTH "${_fw_json}")
+    math(EXPR _fw_last "${_fw_count} - 1")
+    foreach(_fw_index RANGE 0 ${_fw_last})
+        string(JSON _fw_name GET "${_fw_json}" ${_fw_index} name)
+        list(APPEND DQ9_FIRMWARE_PARTS "${_fw_name}")
+    endforeach()
+    set(_fw_dep "${DQ9_FIRMWARE_DIR}/parts.json")
+    message(STATUS "Firmware boot banks: ${DQ9_FIRMWARE_PARTS}")
+else()
+    message(STATUS "No firmware dump: its boot code stays on the interpreter")
+endif()
+
 # Whole-ROM static analysis (tools/static_scan_dq9.py, ~10 s, no gameplay):
 # every image is scanned with `nds_recompile --static-scan` and the images
 # exchange cross-image call targets until the set converges. Coverage seeds
@@ -65,9 +101,9 @@ add_custom_command(
     COMMAND "${DQ9_PYTHON}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/static_scan_dq9.py"
             --recompiler $<TARGET_FILE:nds_recompile>
             --inputs "${DQ9_INPUT_DIR}" --out "${DQ9_ANALYSIS_DIR}" --keep-seeds
-    DEPENDS nds_recompile ${DQ9_PREP_OUTPUTS}
+    DEPENDS nds_recompile ${DQ9_PREP_OUTPUTS} ${_fw_dep}
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/static_scan_dq9.py"
-    COMMENT "Static whole-ROM scan of YDQP (main, ARM7, overlays)")
+    COMMENT "Static whole-ROM scan of YDQP (main, ARM7, overlays, firmware)")
 add_custom_target(dq9_analysis DEPENDS "${DQ9_ANALYSIS_MANIFEST}")
 
 # Banks as "<bank>:<shards>:<image>[:separate]". <image> names the analysis
@@ -80,7 +116,8 @@ add_custom_target(dq9_analysis DEPENDS "${DQ9_ANALYSIS_MANIFEST}")
 #
 # "separate" keeps every function validating on its own instead of coalescing
 # neighbours, for code whose surroundings change while it runs: ov029 decrypts
-# and re-encrypts one region at a time.
+# and re-encrypts one region at a time, and the firmware's last stage wipes
+# memory right up to the routine doing the wiping.
 set(DQ9_BANKS
     "dq9_arm9:24:arm9"
     "dq9_arm7:4:arm7"
@@ -96,6 +133,15 @@ set(DQ9_BANKS
     "dq9_arm9_ov029:2:ov029:separate"
     "dq9_arm9_ov030:2:ov030" "dq9_arm9_ov031:8:ov031" "dq9_arm9_ov033:2:ov033"
     "dq9_arm9_ov034:2:ov034")
+# Named to sort after every game bank, and sorted among themselves, because
+# this list has to stay in registration order.
+list(SORT DQ9_FIRMWARE_PARTS)
+foreach(_fw_part IN LISTS DQ9_FIRMWARE_PARTS)
+    string(REGEX MATCH "[79]$" _fw_cpu "${_fw_part}")
+    string(REGEX REPLACE "[79]$" "" _fw_role "${_fw_part}")
+    list(APPEND DQ9_BANKS
+        "dq9_fw_arm${_fw_cpu}_${_fw_role}:4:fw${_fw_part}:separate")
+endforeach()
 # Superblocks (--coalesce-fallthroughs): adjacent functions inside one 4 KiB
 # page are emitted as one host function, removing the dispatch round trip at
 # each artificial fall-through. A merge must never run across an address a
@@ -122,6 +168,8 @@ foreach(_spec IN LISTS DQ9_BANKS)
     endif()
     if(_image MATCHES "^ov([0-9]+)$")
         set(_bin "${DQ9_INPUT_DIR}/overlays/arm9_overlay_${CMAKE_MATCH_1}.bin")
+    elseif(_image MATCHES "^fw(.+)$")
+        set(_bin "${DQ9_FIRMWARE_DIR}/${CMAKE_MATCH_1}.bin")
     else()
         set(_bin "${DQ9_INPUT_DIR}/${_image}.bin")
     endif()
