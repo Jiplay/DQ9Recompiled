@@ -43,7 +43,8 @@ Then build the runner against the bank directory:
     cmake -G Ninja -S ndsrecomp/runner -B build-runner -DCMAKE_BUILD_TYPE=Release \
         -DNDS_BOOTSTRAP_FIRMWARE=ON -DNDS_TITLE_BANK_DIR=$PWD/generated/recomp \
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
-        -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF
+        -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
+        -DNDS_EMBED_DUMPS_DIR=$PWD/ndsrecomp/bios
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
@@ -93,8 +94,10 @@ one folder:
 `settings.toml` holds the settings and is meant to be edited by hand; the Esc
 menu writes its changes back to it, keeping your comments. The save is
 `saves/DQ9Recomp.sav`, and savestates, performance logs and coverage manifests
-sit alongside it. BIOS dumps are found in `bios/` there, in `bios/` next to the
-executable, or in `ndsrecomp/bios`; otherwise the game asks for the folder.
+sit alongside it. With `-DNDS_EMBED_DUMPS_DIR` the BIOS and firmware dumps are
+built into the executable and the game only asks for the ROM. Without it, they
+are found in `bios/` there, in `bios/` next to the executable, or in
+`ndsrecomp/bios`; otherwise the game asks for the folder.
 
 Any other command line (`nds_runner <bios dir> --rom ...`) behaves as before
 and ignores `settings.toml`.
