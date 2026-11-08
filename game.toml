@@ -26,13 +26,16 @@ second_screen_size = 25
 
 [system]
 startup_mode = "automatic"
-# No firmware dump: the runner synthesizes the flash image (user settings,
-# Wi-Fi slots, a per-install MAC) and boots the cartridge directly, since a
-# generated image has no boot code. Only biosnds7.rom and biosnds9.rom are
-# needed. Set both back (boot = "lle", generated_firmware = false) to run the
-# dump's recompiled boot code instead.
+# No dumps: the runner synthesizes the flash image (user settings, Wi-Fi
+# slots, a per-install MAC) and boots the cartridge directly, since a
+# generated image has no boot code, on the recompiled FreeBIOS in place of
+# the retail BIOS. freebios = false uses biosnds7.rom and biosnds9.rom
+# instead. boot = "lle" with generated_firmware = false and freebios = false
+# runs a firmware dump's recompiled boot code (configure with
+# -DDQ9_FIRMWARE_BANKS=ON).
 boot = "direct"
 generated_firmware = true
+freebios = true
 # Firmware user language, which YDQP uses to pick its text language:
 # english, french, german, italian or spanish (or "preserve" to keep the
 # firmware dump's own). Override per run with NDS_LANGUAGE or --language.
