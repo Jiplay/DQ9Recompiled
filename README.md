@@ -52,6 +52,19 @@ The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
 `coverage/entry-points.json` (`tools/promote_main_coverage.py`); the bank
 build keeps those seeds on top of the static scan.
 
+### Hooks
+A bank with a manifest at `config/hooks/<bank>.toml` is generated with those
+mid-instruction hooks baked in (schema and semantics:
+`ndsrecomp/docs/midasm-hooks.md`). Put the handlers in `src/hooks/` and pass
+them to the runner configure as an absolute, semicolon-separated list:
+
+    -DNDS_TITLE_HOOK_SOURCES="$PWD/src/hooks/example.cpp"
+
+A manifest whose name is not a bank fails the configure, and a missing
+handler fails the runner link. `-DDQ9_HOOKS=OFF` regenerates every bank
+without hooks, which is the reference build to compare a hook against. DQ9
+ships no hooks yet.
+
 ## Without the interpreter
 Everything the game runs is compiled ahead of time, including the two things
 that look like they could not be:

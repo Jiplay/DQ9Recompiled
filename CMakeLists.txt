@@ -149,6 +149,28 @@ endforeach()
 # gets the dispatch tables of the same-CPU banks before it in the runner's
 # alphabetical registration order as --preceding-dispatch. DQ9_BANKS is kept
 # in that order. A superfluous preceding row only suppresses a merge.
+# Mid-instruction hooks (ndsrecomp/docs/midasm-hooks.md). A bank with a
+# manifest at config/hooks/<bank>.toml is generated with it; the handlers go
+# in src/hooks/ and link into the runner through NDS_TITLE_HOOK_SOURCES.
+# DQ9_HOOKS=OFF generates every bank without hooks: the reference build a
+# hook's effect is measured against.
+option(DQ9_HOOKS "Bake config/hooks/<bank>.toml into the generated banks" ON)
+set(DQ9_HOOK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/config/hooks")
+file(GLOB DQ9_HOOK_MANIFESTS CONFIGURE_DEPENDS "${DQ9_HOOK_DIR}/*.toml")
+set(_dq9_bank_names)
+foreach(_spec IN LISTS DQ9_BANKS)
+    string(REGEX REPLACE ":.*" "" _name "${_spec}")
+    list(APPEND _dq9_bank_names "${_name}")
+endforeach()
+foreach(_manifest IN LISTS DQ9_HOOK_MANIFESTS)
+    get_filename_component(_name "${_manifest}" NAME_WE)
+    if(NOT _name IN_LIST _dq9_bank_names)
+        message(FATAL_ERROR
+            "${_manifest} names no bank; hook manifests are "
+            "config/hooks/<bank>.toml for a bank in DQ9_BANKS")
+    endif()
+endforeach()
+
 set(DQ9_ARM9_SOURCES)
 set(DQ9_ARM7_SOURCES)
 set(DQ9_BANK_STAMPS)
@@ -188,6 +210,13 @@ foreach(_spec IN LISTS DQ9_BANKS)
     else()
         set(_cpu arm9)
     endif()
+    set(_hooks)
+    set(_hook_dep)
+    set(_hook_manifest "${DQ9_HOOK_DIR}/${_bank}.toml")
+    if(DQ9_HOOKS AND _hook_manifest IN_LIST DQ9_HOOK_MANIFESTS)
+        set(_hooks --hooks "${_hook_manifest}")
+        set(_hook_dep "${_hook_manifest}")
+    endif()
     set(_preceding_args ${_preceding_${_cpu}_args})
     set(_preceding_stamps ${_preceding_${_cpu}_stamps})
     # gen_bank.py keys the stamp on the recompiler binary, config, candidates,
@@ -208,9 +237,11 @@ foreach(_spec IN LISTS DQ9_BANKS)
                 --max-function-bytes 512
                 --validate-live-bytes
                 ${_merge}
+                ${_hooks}
                 ${_preceding_args}
         DEPENDS nds_recompile "${DQ9_ANALYSIS_MANIFEST}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_bank.py"
+                ${_hook_dep}
                 ${_preceding_stamps}
         COMMENT "Recompiling YDQP bank ${_bank}")
     if(_cpu STREQUAL arm7)
