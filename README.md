@@ -44,7 +44,8 @@ Then build the runner against the bank directory:
         -DNDS_BOOTSTRAP_FIRMWARE=ON -DNDS_TITLE_BANK_DIR=$PWD/generated/recomp \
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
-        -DNDS_EMBED_DUMPS_DIR=$PWD/ndsrecomp/bios
+        -DNDS_EMBED_DUMPS_DIR=$PWD/ndsrecomp/bios \
+        -DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
@@ -55,15 +56,22 @@ build keeps those seeds on top of the static scan.
 ### Hooks
 A bank with a manifest at `config/hooks/<bank>.toml` is generated with those
 mid-instruction hooks baked in (schema and semantics:
-`ndsrecomp/docs/midasm-hooks.md`). Put the handlers in `src/hooks/` and pass
-them to the runner configure as an absolute, semicolon-separated list:
+`ndsrecomp/docs/midasm-hooks.md`). Their handlers live in `src/hooks/` and go
+to the runner configure as an absolute, semicolon-separated
+`NDS_TITLE_HOOK_SOURCES` list. A manifest whose name is not a bank fails the
+configure, and a missing handler fails the runner link.
 
-    -DNDS_TITLE_HOOK_SOURCES="$PWD/src/hooks/example.cpp"
+Shipped hooks:
 
-A manifest whose name is not a bank fails the configure, and a missing
-handler fails the runner link. `-DDQ9_HOOKS=OFF` regenerates every bank
-without hooks, which is the reference build to compare a hook against. DQ9
-ships no hooks yet.
+- **Skip intros** (`skip_intros.cpp`; `dq9_arm9_ov020.toml`, `dq9_arm9.toml`):
+  boots past the Nintendo / Mobiclip / Square Enix / Level-5 logos and the
+  opening movie by steering two of the game's own branches onto the paths it
+  takes after a soft reset. The game proper starts about 0.9e9 guest cycles
+  sooner, plus the whole movie.
+
+`-DDQ9_HOOKS=OFF` regenerates every bank without hooks (then drop
+`NDS_TITLE_HOOK_SOURCES` from the runner configure); that is the reference
+build to compare a hook against.
 
 ## Without the interpreter
 Everything the game runs is compiled ahead of time, including the two things

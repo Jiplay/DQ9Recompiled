@@ -1,0 +1,19 @@
+# Skip intros, part 2: the opening movie (data/movie/xenlon_OP_*.mods).
+# Handler: src/hooks/skip_intros.cpp.
+#
+# After the overlay-20 boot sequence returns, the main loop plays the movie
+# from overlay 16 unless the byte at ctx+0x7F72 is set; when it is, the game
+# itself takes the else branch at 0x02001064, which only clears that byte.
+# The skipped branch sets and clears ctx+0x63D6 around the movie, so leaving
+# it out is neutral. The hook makes the compare see the byte set.
+version = 1
+
+[program]
+bank = "dq9_arm9"
+sha1 = "c45c4a9c8e8cef51da713a4a02213c001699fcbc"
+
+[[hook]]
+address = 0x02000FD8      # cmp r1, #0 ; bne 0x02001064  (r1 = ctx+0x7F72)
+mode = "arm"
+name = "Dq9SkipOpeningMovie"
+registers = ["r1"]

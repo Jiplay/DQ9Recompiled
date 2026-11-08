@@ -1,0 +1,20 @@
+# Skip intros, part 1: the boot logos (Nintendo, Mobiclip, Square Enix,
+# Level-5). Handler: src/hooks/skip_intros.cpp.
+#
+# Overlay 20 is the boot sequence. On the retail path it reads the boot
+# phase (ctx+0x7F6C, via 0x0201202C) and shows the logos only when it is 0,
+# i.e. on a cold boot; a nonzero phase (a soft reset) branches straight to
+# 0x0218C444, which does the same post-logo bookkeeping as the logo path
+# (phase = 5, mode = 0, ctx+0x7F70 = 1). The hook makes the compare see a
+# nonzero phase.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov020"
+sha1 = "93716c2166c34f8c3ef1e430c85cde5a64be454a"
+
+[[hook]]
+address = 0x0218BF38      # cmp r0, #0 ; bne 0x0218C444  (r0 = boot phase)
+mode = "arm"
+name = "Dq9SkipBootLogos"
+registers = ["r0"]
