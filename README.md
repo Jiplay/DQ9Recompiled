@@ -16,15 +16,16 @@ generated code is committed.
   99.7% on ARM7, starting from the ROM entry alone. On a 1.5G-cycle no-input
   boot this cuts interpreted ARM9 instructions by 63% (53.9M → 20.1M). See
   `HANDOFF_STATIC_SCANNER.md` §11-12.
-- Banks: ARM9 main, ARM7, 31 ARM9 overlays and the firmware's boot code
-  (`DQ9_BANKS` in `CMakeLists.txt`). Every row is gated by the ROM SHA-1 and by
+- Banks: ARM9 main, ARM7 and 31 ARM9 overlays (`DQ9_BANKS` in
+  `CMakeLists.txt`), plus the firmware's boot code with `-DDQ9_FIRMWARE_BANKS=ON`. Every row is gated by the ROM SHA-1 and by
   live-byte validation.
-- No interpreter: the game runs as compiled code from the first firmware
+- No interpreter: the game runs as compiled code from its first
   instruction, and the runner below does not contain one. See
   [Without the interpreter](#without-the-interpreter).
 - Save: 64 KiB EEPROM (`[cartridge]` in `game.toml`), raw 65,536-byte
   `.sav` images, interchangeable with emulator saves that have no footer.
-  BIOS/firmware dumps go in `ndsrecomp/bios`.
+  BIOS dumps go in `ndsrecomp/bios`. No firmware dump is needed: `game.toml`
+  boots with a generated firmware image (`[system] generated_firmware`).
 
 ## Build
     python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
@@ -81,17 +82,21 @@ that look like they could not be:
   decrypted again around every protected call. Its plaintext is a pure function
   of the ROM, so `tools/ov029_unprotect.py` recovers it during
   `dq9_prepare` and the bank is built from the bytes that actually execute.
-- **The firmware's boot code** only exists in RAM at run time, but it is the
-  output of a fixed decode. `ndsrecomp/tools/fw_extract.py` runs that decode
-  on `DQ9_FIRMWARE` and `DQ9_BIOS7` (by default the dumps in `ndsrecomp/bios`)
-  when the project is configured, so the dumps have to be there at that point.
+- **The firmware's boot code** (only with `-DDQ9_FIRMWARE_BANKS=ON`, for
+  `boot = "lle"` with `generated_firmware = false` in `game.toml`) only exists
+  in RAM at run time, but it is the output of a fixed decode.
+  `ndsrecomp/tools/fw_extract.py` runs that decode on `DQ9_FIRMWARE` and
+  `DQ9_BIOS7` (by default the dumps in `ndsrecomp/bios`) when the project is
+  configured, so the dumps have to be there at that point. The default
+  generated firmware boots the cartridge directly and needs neither.
 
 `-DNDS_INTERPRETER=OFF` above leaves the interpreter out of the binary. Code with
 no live bank then stops both CPUs with `[no-interpreter] no live bank for
 pc=...`. Two things will do that:
 
-- booting a firmware dump other than the one the banks were built from
-  (reconfigure with the right `DQ9_FIRMWARE`);
+- booting a firmware dump without its banks, or other than the one they were
+  built from (reconfigure with `DQ9_FIRMWARE_BANKS` and the right
+  `DQ9_FIRMWARE`);
 - the firmware menu, which is not compiled: keep `startup_mode = "automatic"`.
 
 Dropping the flag brings the interpreter back as a fallback, and a relink is all

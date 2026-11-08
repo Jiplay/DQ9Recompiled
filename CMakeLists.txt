@@ -53,10 +53,14 @@ add_custom_command(
     COMMENT "Verifying YDQP and preparing main/overlay code images")
 add_custom_target(dq9_prepare DEPENDS ${DQ9_PREP_OUTPUTS})
 
-# The firmware's boot code runs before the cartridge does. The dumps it comes
-# from are the user's own, so its banks exist only when they are present, and
-# are generated from whichever dump the runner will boot. Decoding takes
+# The firmware's boot code runs before the cartridge does, but only with
+# game.toml's boot = "lle": the default generated firmware boots the cartridge
+# directly and needs no dump, so these banks are opt-in. The dumps they come
+# from are the user's own, so they exist only when those are present, and are
+# generated from whichever dump the runner will boot. Decoding takes
 # milliseconds and decides which parts exist, so it happens at configure time.
+option(DQ9_FIRMWARE_BANKS
+    "Generate banks for a firmware dump's boot code (for boot = \"lle\")" OFF)
 set(DQ9_FIRMWARE "${NDSRECOMP_ROOT}/bios/firmware.bin" CACHE FILEPATH
     "Firmware dump to generate boot banks from")
 set(DQ9_BIOS7 "${NDSRECOMP_ROOT}/bios/biosnds7.rom" CACHE FILEPATH
@@ -64,7 +68,7 @@ set(DQ9_BIOS7 "${NDSRECOMP_ROOT}/bios/biosnds7.rom" CACHE FILEPATH
 set(DQ9_FIRMWARE_DIR "${DQ9_INPUT_DIR}/firmware")
 set(DQ9_FIRMWARE_PARTS)
 set(_fw_dep)
-if(EXISTS "${DQ9_FIRMWARE}" AND EXISTS "${DQ9_BIOS7}")
+if(DQ9_FIRMWARE_BANKS AND EXISTS "${DQ9_FIRMWARE}" AND EXISTS "${DQ9_BIOS7}")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
         "${DQ9_FIRMWARE}" "${DQ9_BIOS7}"
         "${NDSRECOMP_ROOT}/tools/fw_extract.py")
@@ -86,7 +90,17 @@ if(EXISTS "${DQ9_FIRMWARE}" AND EXISTS "${DQ9_BIOS7}")
     set(_fw_dep "${DQ9_FIRMWARE_DIR}/parts.json")
     message(STATUS "Firmware boot banks: ${DQ9_FIRMWARE_PARTS}")
 else()
-    message(STATUS "No firmware dump: its boot code stays on the interpreter")
+    if(DQ9_FIRMWARE_BANKS)
+        message(FATAL_ERROR "DQ9_FIRMWARE_BANKS needs ${DQ9_FIRMWARE} and ${DQ9_BIOS7}")
+    endif()
+    # The scan picks firmware parts up from parts.json and the runner globs
+    # every bank in the directory, so a previous opt-in's output must go.
+    file(REMOVE_RECURSE "${DQ9_FIRMWARE_DIR}")
+    file(GLOB _fw_stale "${DQ9_RECOMP_DIR}/dq9_fw_*")
+    if(_fw_stale)
+        file(REMOVE ${_fw_stale})
+    endif()
+    message(STATUS "Firmware boot banks: off (generated firmware, direct boot)")
 endif()
 
 # Whole-ROM static analysis (tools/static_scan_dq9.py, ~10 s, no gameplay):
