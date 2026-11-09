@@ -58,6 +58,16 @@ enabled = true
 provider = "dq9-dlc"   # label only; dns_server wins
 dns_server = "172.104.88.237"
 
+# Local wireless (DQ9's multiplayer, the Rapportal) between runners on this
+# machine and on the local network: they find each other by UDP broadcast on
+# ports 26710-26725, so Windows asks once to allow the runner through its
+# firewall (allow private networks). Where broadcast is blocked, list the
+# other PCs in peers. link = "loopback" keeps it to this machine.
+[local_wireless]
+enabled = true
+link = "lan"
+# peers = ["192.168.1.20"]
+
 # 64 KiB EEPROM, confirmed from a working emulator save of YDQP (a raw
 # 65,536-byte image starting "DRAGON QUEST IX"). The runner reads and writes
 # the same raw format.
