@@ -14,3 +14,9 @@
 performance-*.jsonl
 
 __pycache__/
+
+# scripts/build.py output.
+/DQ9Recomp
+/DQ9Recomp.exe
+/*.zip
+/*.tar.gz

@@ -24,10 +24,20 @@ generated code is committed.
   [Without the interpreter](#without-the-interpreter).
 - Save: 64 KiB EEPROM (`[cartridge]` in `game.toml`), raw 65,536-byte
   `.sav` images, interchangeable with emulator saves that have no footer.
-  BIOS dumps go in `ndsrecomp/bios`. No firmware dump is needed: `game.toml`
-  boots with a generated firmware image (`[system] generated_firmware`).
+  No dumps are needed, to build or to play: `game.toml` boots on the
+  recompiled FreeBIOS (`[system] freebios`) with a generated firmware image
+  (`generated_firmware`), and the runner is built without the retail BIOS
+  banks (`-DNDS_RETAIL_BIOS_BANKS=OFF`).
 
 ## Build
+    python3 scripts/build.py
+
+does everything below on Linux, macOS and Windows: it creates `.venv`,
+generates the banks, builds the runner (with clang and, on Windows, the
+extra flags it needs) and copies it to `DQ9Recomp[.exe]` in the repo root.
+`--help` lists the options (`--release`, `--jobs`, `--runner-only`, `--no-hooks`,
+`--interpreter`, `--sdl3-dir`, `--package NAME`...). The manual steps:
+
     python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
     cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release
     cmake --build build --target dq9_romcheck dq9_generate_banks -j3
@@ -45,7 +55,7 @@ Then build the runner against the bank directory:
         -DNDS_BOOTSTRAP_FIRMWARE=ON -DNDS_TITLE_BANK_DIR=$PWD/generated/recomp \
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
-        -DNDS_EMBED_DUMPS_DIR=$PWD/ndsrecomp/bios \
+        -DNDS_RETAIL_BIOS_BANKS=OFF \
         "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp"
     cmake --build build-runner -j6 --target nds_runner
 
@@ -126,10 +136,8 @@ one folder:
 `settings.toml` holds the settings and is meant to be edited by hand; the Esc
 menu writes its changes back to it, keeping your comments. The save is
 `saves/DQ9Recomp.sav`, and savestates, performance logs and coverage manifests
-sit alongside it. With `-DNDS_EMBED_DUMPS_DIR` the BIOS and firmware dumps are
-built into the executable and the game only asks for the ROM. Without it, they
-are found in `bios/` there, in `bios/` next to the executable, or in
-`ndsrecomp/bios`; otherwise the game asks for the folder.
+sit alongside it. The game only asks for the ROM: it runs on FreeBIOS with a
+generated firmware, so there are no BIOS or firmware dumps to find.
 
 Any other command line (`nds_runner <bios dir> --rom ...`) behaves as before
 and ignores `settings.toml`.
