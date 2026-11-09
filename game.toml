@@ -19,6 +19,9 @@ scaling = "nearest"          # nearest | bilinear | integer (pixel-perfect)
 # 3D detail as a % of the window's resolution (>100 supersamples). Replace
 # with internal_resolution = N to pin a fixed multiplier instead.
 resolution_scale = 100
+# auto drops 3D to 1x while frames wait on the GPU; off keeps the chosen
+# detail. NDS_PERFORMANCE_GOVERNOR / --performance-governor override it.
+performance_governor = "off"  # auto | off | stage1 | stage2
 # The other screen, right of the main one and bottom-aligned (below it,
 # centred, in a portrait window), as a % of its size (0..60; 0 hides it). A
 # minimum: in letterbox it grows into any space left over. Also in the Esc menu.
