@@ -147,6 +147,10 @@ def build_runner(args, compilers):
     if args.recomp_ui:
         configure.append(f"-DNDS_RECOMP_UI_ROOT={cmake_path(args.recomp_ui)}")
 
+    configure.append(f"-DNDS_ONLINE={'ON' if args.online else 'OFF'}")
+    if args.recomp_net:
+        configure.append(f"-DNDS_RECOMP_NET_ROOT={cmake_path(args.recomp_net)}")
+
     if IS_WINDOWS:
         configure += [
             # C++ only, so the generated C banks are unaffected.
@@ -220,6 +224,10 @@ def parse_args():
     p.add_argument("--sdl3-dir", help="Directory with SDL3Config.cmake (default: $SDL3_DIR, "
                                       "or ../EternalSonataReprise/sdk/cmake on Windows)")
     p.add_argument("--recomp-ui", help="Path to the recomp-ui checkout (default: ../recomp-ui)")
+    p.add_argument("--online", action="store_true",
+                   help="Build Netplay (online lobbies, NDS_ONLINE=ON); needs the "
+                        "recomp-net checkout")
+    p.add_argument("--recomp-net", help="Path to the recomp-net checkout (default: ../recomp-net)")
     return p.parse_args()
 
 

@@ -68,6 +68,17 @@ enabled = true
 link = "lan"
 # peers = ["192.168.1.20"]
 
+# Netplay: the Rapportal over the internet. While it is on, only the players
+# of your online lobby are in range (not the LAN). Opening the Rapportal opens
+# a lobby; a guest picks it and joins at the Stornway inn as usual. Needs a
+# build with -DNDS_ONLINE=ON; the public lobby server asks for a Discord
+# sign-in once (--netplay-sign-in on). Players see only the relay's address.
+[online]
+enabled = false
+game_name = "DQ9Recomp"
+# lobby_name = "Marco's world"   # empty: "<your name>'s lobby"
+# lobby_url = "ws://netplay.retcomm.net:8765"
+
 # 64 KiB EEPROM, confirmed from a working emulator save of YDQP (a raw
 # 65,536-byte image starting "DRAGON QUEST IX"). The runner reads and writes
 # the same raw format.
