@@ -138,11 +138,14 @@ and ignores `settings.toml`.
 Local wireless is on (`[local_wireless]` in `game.toml`): runners on the same
 local network are in radio range of each other, so one player opens the
 Rapportal and the others join from the inn in Stornway, as on real DS units.
-Discovery is a UDP broadcast on ports 26710-26725. On first launch Windows
-asks whether to let the runner through its firewall; allow it on private
-networks. If the others still don't show up (networks that block broadcast,
-or a PC with several network adapters), add `--local-wireless-peer <IP>` for
-each of the other PCs. Two copies on one PC: `--instance 0` and
+Discovery is a UDP broadcast on ports 26710-26725, sent on every Ethernet
+and Wi-Fi network the PC is on. On first launch Windows asks whether to let
+the runner through its firewall; allow it on private networks. On Linux,
+open the ports yourself if a firewall is on (`sudo ufw allow
+26710:26725/udp`, or `sudo firewall-cmd --add-port=26710-26725/udp`). If the
+others still don't show up (networks that block broadcast, or players
+reached through a VPN such as Tailscale), add `--local-wireless-peer <IP>`
+for each of the other PCs. Two copies on one PC: `--instance 0` and
 `--instance 1` (separate saves).
 
 Recall can be measured offline with
