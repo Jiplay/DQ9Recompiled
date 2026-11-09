@@ -1,0 +1,31 @@
+# Local wireless diagnostics (log only; changes no guest state).
+# Handler: src/hooks/local_wireless_diag.cpp.
+#
+# 0x027E8AD0 is entry 0x25 of the WMSP request table (0x027F74A8): the
+# disconnect that ARM7's WM code posts to itself, as opposed to entry 0x0D
+# (WM_Disconnect from ARM9). It tail-calls the shared disconnect routine
+# 0x027E45DC(req, 1, 0). req+8 holds the reason: 0x8001 from the MP
+# lifetime checks (timer 0x027E5F70 on a child, 0x027E1560 per child on a
+# parent), 0x8003 from MP indication 0x186 (0x027E19CC).
+version = 1
+
+[program]
+bank = "dq9_arm7"
+sha1 = "a662d5c6a78e990244299926cf6862ce910a475d"
+
+[[hook]]
+address = 0x027E8AD0      # ldr r12, =0x027E45DC (r0 = request)
+mode = "arm"
+name = "Dq9WmInternalDisconnect"
+registers = ["r0"]
+
+# 0x027EB384 is the WL MAC's "set status flag": it ORs r0 into the word at
+# wl+0x3F4 and wakes the task that reports it to WM as indication 0x186
+# (0x027EB3C8). WM disconnects on any status but 0x20 (0x027E194C). 23
+# error paths call it; lr says which one.
+[[hook]]
+address = 0x027EB384      # push {r4, lr}
+mode = "arm"
+name = "Dq9WlSetStatusFlag"
+registers = ["r0", "lr"]
+

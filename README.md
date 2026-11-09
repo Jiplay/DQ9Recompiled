@@ -46,7 +46,7 @@ Then build the runner against the bank directory:
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
         -DNDS_EMBED_DUMPS_DIR=$PWD/ndsrecomp/bios \
-        -DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp
+        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp"
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
@@ -69,6 +69,12 @@ Shipped hooks:
   opening movie by steering two of the game's own branches onto the paths it
   takes after a soft reset. The game proper starts about 0.9e9 guest cycles
   sooner, plus the whole movie.
+- **Local wireless diagnostics** (`local_wireless_diag.cpp`;
+  `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
+  ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and
+  whenever its WL layer raises a status flag (with the code path). These are
+  rare events; they explained the online lobby join failures
+  (`HANDOFF_ONLINE_LOBBY.md`).
 
 `-DDQ9_HOOKS=OFF` regenerates every bank without hooks (then drop
 `NDS_TITLE_HOOK_SOURCES` from the runner configure); that is the reference
