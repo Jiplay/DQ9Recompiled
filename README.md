@@ -46,7 +46,7 @@ Then build the runner against the bank directory:
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
         -DNDS_EMBED_DUMPS_DIR=$PWD/ndsrecomp/bios \
-        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp"
+        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp"
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
