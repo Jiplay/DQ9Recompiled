@@ -3,6 +3,10 @@
 // distance, [title] camera_distance in settings.toml). 100% leaves the game
 // untouched. See config/hooks/dq9_arm9.toml for the guest code.
 //
+// Auto (the default) follows the window: the distance grows with the height
+// the main screen is shown at, so the characters keep the size they have in
+// the default 2x window and a bigger window shows more around them.
+//
 // It applies to every scene that uses the main 3D camera: field, towns,
 // dungeons, battles and cutscenes. The far plane is not moved, so very
 // distant scenery can clip sooner when zoomed out.
@@ -18,22 +22,47 @@
 
 namespace {
 
-constexpr const char* kChoices[] = {"50%",  "75%",  "100%", "125%",
-                                    "150%", "175%", "200%", "250%",
-                                    "300%", "400%"};
-constexpr int kValues[] = {50, 75, 100, 125, 150, 175, 200, 250, 300, 400};
+// Auto is 0: a fixed distance is never 0%.
+constexpr int kAuto = 0;
+constexpr const char* kChoices[] = {"Auto", "50%",  "75%",  "100%",
+                                    "125%", "150%", "175%", "200%",
+                                    "250%", "300%", "400%"};
+constexpr int kValues[] = {kAuto, 50, 75, 100, 125, 150, 175, 200, 250, 300,
+                           400};
 
 constexpr NdsTitleSetting kCameraDistance = {
     "camera_distance",
     "Camera distance",
     "How far the camera sits from what it looks at. Above 100% zooms out "
-    "and shows more around you; below zooms in.",
-    50, 400, 25,
+    "and shows more around you; below zooms in. Auto follows the window "
+    "size: characters keep their size and a bigger window shows more.",
+    0, 400, 25,
     kChoices, sizeof(kChoices) / sizeof(kChoices[0]), kValues,
-    100,
+    kAuto,
 };
 
 const int kCameraDistanceId = nds_title_setting_register(&kCameraDistance);
+
+// Auto: 100% when the main screen is shown 2x (the default window), and
+// proportional to its height, within the fixed choices' range.
+constexpr int kAutoReferencePoints = 192 * 2;
+constexpr int kAutoMinPermille = 500;
+constexpr int kAutoMaxPermille = 4000;
+
+// The distance to use, in thousandths of the game's own (1000 = untouched).
+// Headless (no window) Auto stays at 1000.
+int CameraDistancePermille() {
+    const int value = nds_title_setting_value(kCameraDistanceId);
+    if (value != kAuto) return value * 10;
+    const int points = nds_title_display_height();
+    if (points <= 0) return 1000;
+    const int permille = static_cast<int>(
+        (static_cast<int64_t>(points) * 1000 + kAutoReferencePoints / 2) /
+        kAutoReferencePoints);
+    return permille < kAutoMinPermille   ? kAutoMinPermille
+           : permille > kAutoMaxPermille ? kAutoMaxPermille
+                                         : permille;
+}
 
 // Frame offsets in 0x0202E0B4 (sub sp, sp, #0x150 after push {r3-r5, lr}).
 constexpr uint32_t kPositionOffset = 0xFC;
@@ -86,8 +115,8 @@ double FogDensity(const uint8_t* table, double offset, int shift,
 // Before `ldr r0, =0x0210A250` at 0x0202E4F8: sp+0xFC is the camera
 // position and sp+0xF0 its target, three fx32 words each.
 NDS_TITLE_HOOK void Dq9CameraDistance(uint32_t* sp) {
-    const int percent = nds_title_setting_value(kCameraDistanceId);
-    if (percent == 100) return;
+    const int permille = CameraDistancePermille();
+    if (permille == 1000) return;
     for (uint32_t axis = 0; axis < 3; ++axis) {
         const uint32_t position_addr = *sp + kPositionOffset + axis * 4u;
         const int32_t position =
@@ -95,7 +124,7 @@ NDS_TITLE_HOOK void Dq9CameraDistance(uint32_t* sp) {
         const int32_t target = static_cast<int32_t>(
             bus_read_u32(*sp + kTargetOffset + axis * 4u));
         const int64_t offset =
-            (static_cast<int64_t>(position) - target) * percent / 100;
+            (static_cast<int64_t>(position) - target) * permille / 1000;
         bus_write_u32(position_addr, static_cast<uint32_t>(target + offset));
     }
 }
@@ -151,8 +180,10 @@ NDS_TITLE_HOOK bool Dq9CameraDistanceFixedFog(uint32_t* r0, uint32_t* r7) {
 // the density table is resampled over the old curve's range as it now
 // lands in depth, at the finest slope that still covers it.
 NDS_TITLE_HOOK void Dq9CameraDistanceFog(uint32_t* r7) {
-    const int percent = nds_title_setting_value(kCameraDistanceId);
-    if (percent == 100) return;
+    // With Auto, a resize between the camera hook and this one can skew the
+    // fog for that one frame.
+    const int permille = CameraDistancePermille();
+    if (permille == 1000) return;
 
     const auto word = [](uint32_t addr) {
         return static_cast<int32_t>(bus_read_u32(addr));
@@ -169,9 +200,10 @@ NDS_TITLE_HOOK void Dq9CameraDistanceFog(uint32_t* r7) {
                          word(kCameraTarget + axis * 4u);
         moved += d * d;
     }
-    // The published camera is already moved: moved = percent% of the
+    // The published camera is already moved: moved = permille/1000 of the
     // original distance, and every view depth grew by the difference.
-    const double dolly = std::sqrt(moved) / 4096.0 * (percent - 100) / percent;
+    const double dolly =
+        std::sqrt(moved) / 4096.0 * (permille - 1000) / permille;
     if (map.b <= 0 || dolly == 0) return;
 
     const uint32_t block = *r7;

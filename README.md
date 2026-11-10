@@ -79,11 +79,15 @@ Shipped hooks:
   takes after a soft reset. The game proper starts about 0.9e9 guest cycles
   sooner, plus the whole movie.
 - **Camera distance** (`camera_zoom.cpp`; `dq9_arm9.toml`): the runtime
-  menu's Game > Camera distance, 50% to 400% (`[title] camera_distance` in
-  `settings.toml`). Moves the scene camera along its line of sight before
-  the game builds the view matrix, so it applies to the field, battles and
-  cutscenes alike. 100% (the default) leaves the game untouched; the far
-  plane does not move, so distant scenery can clip sooner when zoomed out.
+  menu's Game > Camera distance, Auto or 50% to 400% (`[title]
+  camera_distance` in `settings.toml`, 0 for Auto). Moves the scene camera
+  along its line of sight before the game builds the view matrix, so it
+  applies to the field, battles and cutscenes alike. 100% leaves the game
+  untouched. Auto (the default) follows the window: the distance is 100% when
+  the main screen is shown at 2x (384 points tall) and grows with its height,
+  so characters keep their size on screen and a bigger window shows more
+  around them (50% to 400%). The far plane does not move, so distant scenery
+  can clip sooner when zoomed out.
   More hooks reshape the map's hardware fog for the moved camera (the
   field's time-of-day fog and the dungeons' fixed fog, which is then
   re-sent every frame), so the fog sits at the same distances as at 100%.
