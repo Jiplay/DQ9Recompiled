@@ -55,6 +55,37 @@ double UiScale() {
 constexpr int kAnchorX = 128;
 constexpr int kAnchorY = 96;
 
+// The overlay loader (0x020A1950) keeps the id loaded in each slot as a
+// signed byte at 0x01FFD364 + 6 * *(u32*)0x01FFD348 + slot (the slot of
+// overlay n is the word at 0x020E8F30 + 8n): slot 0 = overlays 0..6,
+// 1 = 7..14, 2 = 15..21, 3 = 22..30, 4 = 31..32, 5 = 33..34.
+constexpr uint32_t kOverlayBank = 0x01FFD348;
+constexpr uint32_t kOverlaySlots = 0x01FFD364;
+
+int LoadedOverlay(uint32_t slot) {
+    const uint32_t bank = bus_read_u32(kOverlayBank);
+    return static_cast<int8_t>(bus_read_u8(kOverlaySlots + 6 * bank + slot));
+}
+
+// Full-screen pages, left as on the DS. The battle records (camp menu >
+// Battle records, overlay 8 in slot 1; the field and the camp menu have
+// overlay 11 there) fill engine A with a wallpaper on BG1 (screen base 30),
+// draw the buttons, the cursor and "Back" as OBJs, and Stella and her
+// speech box in 3D on BG0, blended over BG1 (BLDCNT 0x0241, EVA 15 /
+// EVB 16). There is no window to keep small: splitting BG1 off shrinks the
+// wallpaper alone and covers the 3D with it, and the speech box would leave
+// Stella behind. Its Defeated Monster List loads overlay 14 in the same
+// slot and is a full-screen page too (a 3D monster over BG1, engine A on
+// the top LCD).
+constexpr uint32_t kMenuSlot = 1;
+constexpr int kRecordsOverlay = 8;
+constexpr int kMonsterListOverlay = 14;
+
+bool FullScreenPage() {
+    const int menu = LoadedOverlay(kMenuSlot);
+    return menu == kRecordsOverlay || menu == kMonsterListOverlay;
+}
+
 }  // namespace
 
 // ---- 3D message window -----------------------------------------------------
@@ -99,7 +130,7 @@ constexpr uint32_t kMtxTrans = 0x04000470;
 // The 3D window's scale, fx32 (kOne = unchanged).
 int32_t TextBoxScale() {
     const int raster = nds_gpu3d_internal_scale();
-    if (raster <= 1) return kOne;
+    if (raster <= 1 || FullScreenPage()) return kOne;
     int32_t k = static_cast<int32_t>(UiScale() * kOne + 0.5);
     const int32_t sharp = (kOne + raster - 1) / raster;
     if (k < sharp) k = sharp;
@@ -179,25 +210,18 @@ constexpr uint8_t kWindowBgs = 0x1E;
 //
 // Continue sets mode 0 at once, but the title's fade-out still runs from
 // overlay 4 after that, so the game also needs overlay 4 gone from its slot.
-// The overlay loader (0x020A1950) keeps the id loaded in each slot as a
-// signed byte at 0x01FFD364 + 6 * *(u32*)0x01FFD348 + slot (the slot of
-// overlay n is the word at 0x020E8F30 + 8n): overlays 0..6 share slot 0,
-// and the field loads another one there (battle: overlay 0).
+// Overlays 0..6 share slot 0 (see LoadedOverlay), and the field loads
+// another one there (battle: overlay 0).
 constexpr uint32_t kMainMode = 0x020F33D8 + 4;
-constexpr uint32_t kOverlayBank = 0x01FFD348;
-constexpr uint32_t kOverlaySlots = 0x01FFD364;
 constexpr uint32_t kTitleSlot = 0;
-constexpr int8_t kTitleOverlay = 4;
+constexpr int kTitleOverlay = 4;
 
 bool InGame() {
     switch (bus_read_u8(kMainMode)) {
         case 0: case 4: case 5: case 9: break;
         default: return false;
     }
-    const uint32_t bank = bus_read_u32(kOverlayBank);
-    const auto slot0 = static_cast<int8_t>(
-        bus_read_u8(kOverlaySlots + 6 * bank + kTitleSlot));
-    return slot0 != kTitleOverlay;
+    return LoadedOverlay(kTitleSlot) != kTitleOverlay && !FullScreenPage();
 }
 
 }  // namespace
