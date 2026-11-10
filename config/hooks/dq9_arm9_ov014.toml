@@ -1,0 +1,13 @@
+# Mouse-friendly menus. Handler: src/hooks/mouse_menus.cpp; see
+# dq9_arm9_ov003.toml (part 5, layout menus) for the guest code.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov014"
+sha1 = "0e024b076a50f50c327f7d3fab53480ec80343fd"
+
+[[hook]]
+address = 0x02186F44      # cmp r1, #0 (r1 = press edge; scene at 0x02186F10)
+mode = "arm"
+name = "Dq9MouseMenuTapPress"
+registers = ["r1", "sp"]

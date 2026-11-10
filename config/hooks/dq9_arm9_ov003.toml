@@ -1,0 +1,67 @@
+# Mouse-friendly menus, part 3: the green look of the window lists. Handler:
+# src/hooks/mouse_menus.cpp (Dq9MouseMenuListGreen; parts 1 and 2 are in
+# dq9_arm9_ov023.toml and dq9_arm9.toml).
+#
+# The scenes that own a window list redraw it when its pen step (0x0205D0F0)
+# returns 2, "the pen moved the cursor", and draw the entry green only while
+# the pen is down: touch manager 0x02114E54 +0x5F and +0x24 (touching), then
+# w+0x30 >= 0. A cursor moved by the mouse hover has no pen down, so it got
+# the hand cursor without the green. The hook, on the beq that skips the
+# green, lets the hover through.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov003"
+sha1 = "bc2b5555cffa43f0d97ee51a8aa30bf32c6edaa5"
+
+[[hook]]
+address = 0x0215C124      # beq (Z = pen not down; priest, in 0x0215C0EC)
+mode = "arm"
+name = "Dq9MouseMenuListGreen"
+registers = ["cpsr"]
+
+[[hook]]
+address = 0x0215DB64      # beq (Z = pen not down; in 0x0215DB3C area)
+mode = "arm"
+name = "Dq9MouseMenuListGreen"
+registers = ["cpsr"]
+
+[[hook]]
+address = 0x0216AA60      # beq (Z = pen not down; in 0x0216AA38 area)
+mode = "arm"
+name = "Dq9MouseMenuListGreen"
+registers = ["cpsr"]
+
+# Part 5: the layout menus ("list C": shop, Patty's party planner, Krak
+# Pot...). The menu code is in the main ARM9 (0x0207F000..0x02082000): items
+# with an id, a rect and flags at item+0x2A, bit 2 = "touched", drawn as the
+# green look. 0x02080DE4(menu, layer, x, y, &chosen) hit-tests (0x02080E50),
+# sets chosen = the item was touched already, and makes it the touched one
+# (0x02080568, which clears the others). So the first tap turns an item
+# green and the second chooses it. Each scene calls it from its own copy of
+# the same template: on a press edge (touch manager +0x55) and with a
+# cursor pointer, it reads the pen (0x02012A94 into sp+0x10 / sp+0xC) and
+# passes x / y in r2 / r3.
+#
+# With the setting on, while no button is held the template runs on the
+# mouse position when it has moved (press hooks below, the position is
+# swapped at the 0x02080DE4 entry in dq9_arm9.toml) and never chooses, so
+# the item under the mouse turns green; a click chooses the item under it.
+
+[[hook]]
+address = 0x02176628      # cmp r1, #0 (r1 = press edge; shop: buy/sell menu and item list, 0x021765B4)
+mode = "arm"
+name = "Dq9MouseMenuTapPress"
+registers = ["r1", "sp"]
+
+[[hook]]
+address = 0x02155150      # cmp r1, #0 (r1 = press edge; scene at 0x02155148)
+mode = "arm"
+name = "Dq9MouseMenuTapPress"
+registers = ["r1", "sp"]
+
+[[hook]]
+address = 0x021608DC      # cmp r1, #0 (r1 = press edge; Patty's party planner)
+mode = "arm"
+name = "Dq9MouseMenuTapPress"
+registers = ["r1", "sp"]

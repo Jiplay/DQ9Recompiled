@@ -188,3 +188,103 @@ name = "Dq9TextBoxEnd"
 address = 0x020D86E0      # G3_SwapBuffers entry (ldr r2, =0x04000540)
 mode = "arm"
 name = "Dq9WindowLayers"
+
+# Mouse-friendly menus (the Game > Mouse-friendly menus setting), part 2:
+# the window lists ("list A": camp menu and the other windowed lists).
+# Handler: src/hooks/mouse_menus.cpp.
+#
+# 0x0205C5C0(owner, ...) is a list's pen step (owner+0x94 enables the pen,
+# widget w = owner+4). Its first branch (0x0205C6CC) never hits on a fresh
+# press: the hit-test 0x0205BD88 maps the rect to an entry through
+# 0x0205BD14, which answers -1 until w+0x4E ("a press is being handled") is
+# set. 0x0205BC3C then does the work: on a press edge (touch manager
+# +0x55) it sets w+0x4E, hit-tests the pen position (0x02012A94 into sp+4 /
+# sp+0), stores the entry in w+0x30 and sets w+0x4C only when it equals the
+# entry touched before. The caller moves the cursor there (returning 2 when
+# it moved). The scene then chooses through 0x0205BD30 (press edge && w+0x4E
+# && w+0x4C), and the camp menu states (ov2, e.g. 0x021622EC) only when the
+# cursor did not move in the same frame. So the first tap moves the cursor
+# and the second chooses.
+#
+# With the setting on, while no button is held the same code runs on the
+# mouse position when it has moved (the cursor follows the mouse; nothing is
+# chosen without a press edge), and on a press w+0x4C is always set, so a
+# click on the cursor entry chooses it. The entry under the mouse is the
+# cursor already, so one click chooses it.
+[[hook]]
+address = 0x0205BC70      # cmp r0, #0 (r0 = press edge, r4 = widget)
+mode = "arm"
+name = "Dq9MouseMenuListPress"
+registers = ["r0", "r4"]
+
+[[hook]]
+address = 0x0205BC8C      # ldr r1, [sp, #4] (x at sp+4, y at sp+0)
+mode = "arm"
+name = "Dq9MouseMenuListPosition"
+registers = ["sp"]
+
+[[hook]]
+address = 0x0205BCC4      # movne r0, #0 (Z = same entry as before)
+mode = "arm"
+name = "Dq9MouseMenuListSame"
+registers = ["cpsr"]
+
+[[hook]]
+address = 0x0205C65C      # b 0x0205C6C4 (cursor moved to the hit, r5 = owner)
+mode = "arm"
+name = "Dq9MouseMenuListDone"
+registers = ["r5"]
+
+# Mouse-friendly menus, part 4: the simple choice lists ("list B": the
+# Yes/No dialogs). Handler: src/hooks/mouse_menus.cpp.
+#
+# 0x020E26AC(m) steps the list: 0x020E1E5C(m+0x10) hit-tests the pen on a
+# press edge (touch manager +0x55; position from 0x02012A94 into sp+4 /
+# sp+0) and returns the entry, -1 for no press or -2 for a miss. On a hit
+# equal to the cursor (m+0x14) with m+0x17 set ("touched", which 0x020E2844
+# draws as the green look) it chooses it (m+0x15 = cursor); then it sets
+# m+0x17 and moves the cursor there. 0x020E2928 hands the choice to the
+# scene only on a frame with a press edge or A / L / R. So the first tap
+# turns an entry green and the second chooses it.
+#
+# With the setting on, while no button is held the hit-test runs on the
+# mouse position when it has moved, and the choice is skipped, so the entry
+# under the mouse turns green. A click chooses the entry under it at once.
+[[hook]]
+address = 0x020E1E70      # cmp r1, #0 (r1 = press edge, r4 = m+0x10)
+mode = "arm"
+name = "Dq9MouseMenuChoicePress"
+registers = ["r1", "r4"]
+
+[[hook]]
+address = 0x020E1E84      # ldr r1, [sp, #4] (x at sp+4, y at sp+0)
+mode = "arm"
+name = "Dq9MouseMenuChoicePosition"
+registers = ["sp"]
+
+[[hook]]
+address = 0x020E26CC      # cmp r2, r0 (r2 = cursor, r0 = entry under the pen)
+mode = "arm"
+name = "Dq9MouseMenuChoiceSame"
+registers = ["r0", "r2"]
+
+[[hook]]
+address = 0x020E26D8      # cmp r1, #0 (r1 = m+0x17, touched before)
+mode = "arm"
+name = "Dq9MouseMenuChoiceTouched"
+registers = ["r1"]
+
+# Mouse-friendly menus, part 5: the layout menus ("list C": shop, Patty's
+# party planner, Krak Pot...). The guest code and the per-scene press hooks
+# are described in dq9_arm9_ov003.toml. Handler: src/hooks/mouse_menus.cpp.
+[[hook]]
+address = 0x02080DE4      # entry of the tap routine (r2 = x, r3 = y)
+mode = "arm"
+name = "Dq9MouseMenuTapPosition"
+registers = ["r2", "r3"]
+
+[[hook]]
+address = 0x02080E28      # tst r0, #4 (r0 = flags of the item hit, bit 2 = touched)
+mode = "arm"
+name = "Dq9MouseMenuTapChoose"
+registers = ["r0"]

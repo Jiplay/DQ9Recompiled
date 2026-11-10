@@ -1,0 +1,21 @@
+# Mouse-friendly menus, part 3: the green look of the window lists. Handler:
+# src/hooks/mouse_menus.cpp (Dq9MouseMenuListGreen; parts 1 and 2 are in
+# dq9_arm9_ov023.toml and dq9_arm9.toml).
+#
+# The scenes that own a window list redraw it when its pen step (0x0205D0F0)
+# returns 2, "the pen moved the cursor", and draw the entry green only while
+# the pen is down: touch manager 0x02114E54 +0x5F and +0x24 (touching), then
+# w+0x30 >= 0. A cursor moved by the mouse hover has no pen down, so it got
+# the hand cursor without the green. The hook, on the beq that skips the
+# green, lets the hover through.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov012"
+sha1 = "35c98fc8c2c7a47a679de50b62e0bb72718d8b6c"
+
+[[hook]]
+address = 0x02185D34      # beq (Z = pen not down; list redraw)
+mode = "arm"
+name = "Dq9MouseMenuListGreen"
+registers = ["cpsr"]

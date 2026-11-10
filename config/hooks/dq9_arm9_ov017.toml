@@ -16,3 +16,11 @@ sha1 = "9bed6c63eb674c6289670751193cff269085fa8b"
 address = 0x0219B088      # bl 0x0204725C (step the icon's animation)
 mode = "arm"
 name = "Dq9InteractPrompt"
+
+# Mouse-friendly menus, part 5 (layout menus): see dq9_arm9_ov003.toml.
+
+[[hook]]
+address = 0x021AB0F4      # cmp r1, #0 (r1 = press edge; scene at 0x021AB0C0)
+mode = "arm"
+name = "Dq9MouseMenuTapPress"
+registers = ["r1", "sp"]

@@ -52,3 +52,11 @@ address = 0x021F961C      # moveq r0, #1 (Z = the cell is the cursor)
 mode = "arm"
 name = "Dq9MouseMenuGridChoose"
 registers = ["cpsr"]
+
+# Part 3, the green look of a window list moved by the mouse hover (see
+# dq9_arm9_ov002.toml for the guest code).
+[[hook]]
+address = 0x021DA214      # beq (Z = pen not down; list redraw)
+mode = "arm"
+name = "Dq9MouseMenuListGreen"
+registers = ["cpsr"]
