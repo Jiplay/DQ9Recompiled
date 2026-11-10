@@ -17,3 +17,21 @@ address = 0x02000FD8      # cmp r1, #0 ; bne 0x02001064  (r1 = ctx+0x7F72)
 mode = "arm"
 name = "Dq9SkipOpeningMovie"
 registers = ["r1"]
+
+# Camera distance (the Game > Camera distance setting).
+# Handler: src/hooks/camera_zoom.cpp.
+#
+# 0x0202E0B4 applies the scene camera, the only caller of the projection
+# builder (0x020C28B0, MTX_PerspectiveW with the camera's fovy sin/cos,
+# aspect, near and far at cam+0x5C..0x6C). It copies the camera position
+# (cam+0x120) and target (cam+0x12C) to sp+0xFC and sp+0xF0, adds shake,
+# sway, the minimum height and the orbit rotation to them, then from
+# 0x0202E4F8 publishes position, up and target (0x0210A250 / 25C / 268) and
+# builds the view matrix from them (0x020C20E4, MTX_LookAt, into 0x0210A05C).
+# The hook moves the position along the target->position line there, so
+# everything the game derives from the camera sees the same moved camera.
+[[hook]]
+address = 0x0202E4F8      # ldr r0, =0x0210A250 (r1 = &position comes next)
+mode = "arm"
+name = "Dq9CameraDistance"
+registers = ["sp"]

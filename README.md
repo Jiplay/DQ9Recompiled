@@ -56,7 +56,7 @@ Then build the runner against the bank directory:
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
         -DNDS_RETAIL_BIOS_BANKS=OFF \
-        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp"
+        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp;$PWD/src/hooks/camera_zoom.cpp"
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
@@ -79,6 +79,12 @@ Shipped hooks:
   opening movie by steering two of the game's own branches onto the paths it
   takes after a soft reset. The game proper starts about 0.9e9 guest cycles
   sooner, plus the whole movie.
+- **Camera distance** (`camera_zoom.cpp`; `dq9_arm9.toml`): the runtime
+  menu's Game > Camera distance, 50% to 400% (`[title] camera_distance` in
+  `settings.toml`). Moves the scene camera along its line of sight before
+  the game builds the view matrix, so it applies to the field, battles and
+  cutscenes alike. 100% (the default) leaves the game untouched; the far
+  plane does not move, so distant scenery can clip sooner when zoomed out.
 - **Local wireless diagnostics** (`local_wireless_diag.cpp`;
   `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
   ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and
