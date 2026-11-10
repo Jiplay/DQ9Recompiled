@@ -6,6 +6,13 @@
 // It applies to every scene that uses the main 3D camera: field, towns,
 // dungeons, battles and cutscenes. The far plane is not moved, so very
 // distant scenery can clip sooner when zoomed out.
+//
+// Moving the camera back pushes every pixel deeper, so the hardware fog
+// (a fixed depth curve from the map's presets) would thicken over the whole
+// scene. Dq9CameraDistanceFog reshapes that curve so each pixel gets the fog
+// it would have had at 100%.
+#include <cmath>
+
 #include "title_hooks.h"
 #include "title_settings.h"
 
@@ -32,6 +39,48 @@ const int kCameraDistanceId = nds_title_setting_register(&kCameraDistance);
 constexpr uint32_t kPositionOffset = 0xFC;
 constexpr uint32_t kTargetOffset = 0xF0;
 
+// What 0x0202E0B4 publishes: the projection (MtxFx44, row-major) and the
+// camera position and target the view matrix is built from.
+constexpr uint32_t kProjection = 0x0210A018;
+constexpr uint32_t kCameraPosition = 0x0210A250;
+constexpr uint32_t kCameraTarget = 0x0210A268;
+
+// Fog fields of the environment block in 0x02051D38 (r7), filled every
+// frame by 0x02051254 and passed to G3X_SetFog and the density table load.
+constexpr uint32_t kFogShiftOffset = 0x54;
+constexpr uint32_t kFogDepthOffset = 0x58;
+constexpr uint32_t kFogTableOffset = 0x64;
+
+constexpr int kFogEntries = 32;
+constexpr int kMaxFogShift = 10;
+
+// Z-buffer depth (15 bits, as FOG_OFFSET counts it) of a point at view
+// distance `dist`, for a projection with z_ndc = a - b / dist: the hardware
+// stores (z / w) * 0x4000 + 0x3FFF.
+struct DepthMap {
+    double a, b;
+    double depth(double dist) const {
+        if (!std::isfinite(dist)) return 0x4000 * a + 0x3FFF;
+        return 0x4000 * (a - b / dist) + 0x3FFF;
+    }
+    double distance(double depth) const {
+        const double denom = a - (depth - 0x3FFF) / 0x4000;
+        return denom > 0 ? b / denom : INFINITY;
+    }
+};
+
+// The hardware's density at `depth`: entry k sits at offset + (k + 1)
+// steps, linear in between, the first entry before and the last after.
+double FogDensity(const uint8_t* table, double offset, int shift,
+                  double depth) {
+    double t = (depth - offset) * (1 << shift) / 0x400;
+    if (t <= 1) return table[0];
+    if (t >= kFogEntries) return table[kFogEntries - 1];
+    const int k = static_cast<int>(t);
+    const double frac = t - k;
+    return table[k - 1] * (1 - frac) + table[k] * frac;
+}
+
 }  // namespace
 
 // Before `ldr r0, =0x0210A250` at 0x0202E4F8: sp+0xFC is the camera
@@ -50,3 +99,120 @@ NDS_TITLE_HOOK void Dq9CameraDistance(uint32_t* sp) {
         bus_write_u32(position_addr, static_cast<uint32_t>(target + offset));
     }
 }
+
+namespace {
+
+// Map environment (r7 = block, *block = env) fog presets: env+0x410 is the
+// fog mode (1 fixed, 2 by time of day), the presets are 0x38 bytes from
+// env+0x288 and are laid out like the per-frame fog at block+0x4C.
+constexpr uint32_t kEnvFogMode = 0x410;
+constexpr uint32_t kEnvFogPresets = 0x288;
+constexpr uint32_t kFogPresetSize = 0x38;
+constexpr uint32_t kFogPresetCount = 7;
+constexpr uint32_t kBlockFog = 0x4C;
+
+}  // namespace
+
+// Before `bl G3X_SetFog` at 0x02051B78, where a fixed-fog map sends its
+// preset (r4) once: keep the preset's address in block+0x4C (r7), which
+// only the time-of-day mode fills.
+NDS_TITLE_HOOK void Dq9CameraDistanceFixedFogPreset(uint32_t* r4,
+                                                    uint32_t* r7) {
+    bus_write_u32(*r7 + kBlockFog, *r4);
+}
+
+// Before `beq 0x02052238` at 0x02051D64, where the per-frame code skips
+// fog for fixed-fog maps (r0 = 1): copy the kept preset to block+0x50..
+// and jump to the fog tail at 0x02052208, so the camera distance can
+// reshape it every frame. At 100% this sends the hardware the same fog the
+// map set up, which also restores it after a change back to 100%.
+NDS_TITLE_HOOK bool Dq9CameraDistanceFixedFog(uint32_t* r0, uint32_t* r7) {
+    if (*r0 != 1) return false;
+    const uint32_t block = *r7;
+    const uint32_t presets = bus_read_u32(block) + kEnvFogPresets;
+    const uint32_t preset = bus_read_u32(block + kBlockFog);
+    if (preset < presets || (preset - presets) % kFogPresetSize != 0 ||
+        (preset - presets) / kFogPresetSize >= kFogPresetCount)
+        return false;
+    // Everything after the first word: mode, shift, offset, color, alpha
+    // and the 32 densities.
+    for (uint32_t at = 4; at < kFogPresetSize; at += 4)
+        bus_write_u32(block + kBlockFog + at, bus_read_u32(preset + at));
+    return true;
+}
+
+// Before `ldr r1, [r7, #0x50]` at 0x02052208, where 0x02051D38 hands the
+// frame's fog to G3X_SetFog (shift r7+0x54, offset r7+0x58) and then loads
+// the 32 densities at r7+0x64. 0x02051254 rewrites all of them from the
+// map's presets every frame, so they can be changed in place.
+//
+// The dolly adds the same distance to every pixel's view depth, but Z
+// depth is not linear in distance, so a new offset alone cannot undo it:
+// the density table is resampled over the old curve's range as it now
+// lands in depth, at the finest slope that still covers it.
+NDS_TITLE_HOOK void Dq9CameraDistanceFog(uint32_t* r7) {
+    const int percent = nds_title_setting_value(kCameraDistanceId);
+    if (percent == 100) return;
+
+    const auto word = [](uint32_t addr) {
+        return static_cast<int32_t>(bus_read_u32(addr));
+    };
+    // Perspective only: m[2][3] = -scaleW, m[3][3] = 0.
+    const int32_t m23 = word(kProjection + 11 * 4);
+    if (m23 == 0 || word(kProjection + 15 * 4) != 0) return;
+    const DepthMap map = {double(word(kProjection + 10 * 4)) / m23,
+                          double(word(kProjection + 14 * 4)) / m23};
+
+    double moved = 0;
+    for (uint32_t axis = 0; axis < 3; ++axis) {
+        const double d = double(word(kCameraPosition + axis * 4u)) -
+                         word(kCameraTarget + axis * 4u);
+        moved += d * d;
+    }
+    // The published camera is already moved: moved = percent% of the
+    // original distance, and every view depth grew by the difference.
+    const double dolly = std::sqrt(moved) / 4096.0 * (percent - 100) / percent;
+    if (map.b <= 0 || dolly == 0) return;
+
+    const uint32_t block = *r7;
+    const int shift = word(block + kFogShiftOffset) & 0xF;
+    const double offset = word(block + kFogDepthOffset) & 0x7FFF;
+    uint8_t table[kFogEntries];
+    for (int k = 0; k < kFogEntries; ++k)
+        table[k] = bus_read_u8(block + kFogTableOffset + k) & 0x7F;
+
+    const auto to_new = [&](double depth) {
+        return map.depth(map.distance(depth) + dolly);
+    };
+    const auto to_old = [&](double depth) {
+        const double dist = map.distance(depth) - dolly;
+        return dist > 0 ? map.depth(dist) : -INFINITY;
+    };
+
+    // The old curve only changes between entry 0 and entry 31.
+    const double step = double(0x400 >> shift);
+    const double lo = to_new(offset + step);
+    const double hi = to_new(offset + kFogEntries * step);
+    int new_shift = 0;
+    while (new_shift < kMaxFogShift &&
+           (kFogEntries - 1) * double(0x400 >> (new_shift + 1)) >= hi - lo)
+        ++new_shift;
+    const int new_step = 0x400 >> new_shift;
+    long new_offset = std::lround(lo) - new_step;
+    if (new_offset < 0) new_offset = 0;
+    if (new_offset > 0x7FFF) new_offset = 0x7FFF;
+
+    for (int k = 0; k < kFogEntries; ++k) {
+        const double old_depth =
+            to_old(double(new_offset) + double(k + 1) * new_step);
+        const long density =
+            std::lround(FogDensity(table, offset, shift, old_depth));
+        bus_write_u8(block + kFogTableOffset + k,
+                     static_cast<uint8_t>(density < 0     ? 0
+                                          : density > 127 ? 127
+                                                          : density));
+    }
+    bus_write_u32(block + kFogShiftOffset, static_cast<uint32_t>(new_shift));
+    bus_write_u32(block + kFogDepthOffset, static_cast<uint32_t>(new_offset));
+}
+

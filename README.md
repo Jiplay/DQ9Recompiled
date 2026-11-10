@@ -85,6 +85,9 @@ Shipped hooks:
   the game builds the view matrix, so it applies to the field, battles and
   cutscenes alike. 100% (the default) leaves the game untouched; the far
   plane does not move, so distant scenery can clip sooner when zoomed out.
+  More hooks reshape the map's hardware fog for the moved camera (the
+  field's time-of-day fog and the dungeons' fixed fog, which is then
+  re-sent every frame), so the fog sits at the same distances as at 100%.
 - **Unlock camera rotation** (`camera_rotation.cpp`; `dq9_arm9.toml`):
   the runtime menu's Game > Unlock camera rotation (`[title]
   unlock_camera_rotation`). L and R turn the field camera all the way round

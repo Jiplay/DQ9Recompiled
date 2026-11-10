@@ -36,6 +36,42 @@ mode = "arm"
 name = "Dq9CameraDistance"
 registers = ["sp"]
 
+# The fog half of the camera distance setting. 0x02051D38 (per frame, r7 =
+# environment block) has 0x02051254 fill r7+0x4C from the map's fog presets
+# (interpolated over time of day): mode +0x50, shift +0x54, offset +0x58,
+# color +0x5C, alpha +0x60, 32 densities +0x64. It then calls G3X_SetFog
+# (0x020C54B4: enable, mode, shift, offset), writes FOG_COLOR and loads the
+# table (0x020C5584 -> FOG_TABLE). The game swaps buffers in Z mode
+# (0x020D86E0 with r1 = 0), so the dolly moves pixels through the fog curve
+# non-linearly; the handler resamples shift, offset and table there.
+[[hook]]
+address = 0x02052208      # ldr r1, [r7, #0x50] (fog mode for G3X_SetFog)
+mode = "arm"
+name = "Dq9CameraDistanceFog"
+registers = ["r7"]
+
+# Maps with fixed fog (dungeons). 0x020519F4 sets a map's environment up:
+# with env+0x410 = 2 (field) the fog is left to the per-frame code above;
+# with 1 it sends one 56-byte preset (r4 = env + 0x288 + 0x38 * index, the
+# same layout as r7+0x4C) to the hardware once, at 0x02051B78, and the
+# per-frame code skips fog for it (0x02051D64). The first hook keeps that
+# preset's address in r7+0x4C, which only mode 2 uses; the second makes
+# the per-frame code copy the preset to r7+0x50.. each frame and take the
+# fog tail at 0x02052208, so Dq9CameraDistanceFog applies to it too.
+[[hook]]
+address = 0x02051B78      # bl G3X_SetFog (mode 1, r4 = preset, r7 = block)
+mode = "arm"
+name = "Dq9CameraDistanceFixedFogPreset"
+registers = ["r4", "r7"]
+
+[[hook]]
+address = 0x02051D64      # beq 0x02052238 (r0 = env+0x410 fog mode)
+mode = "arm"
+name = "Dq9CameraDistanceFixedFog"
+registers = ["r0", "r7"]
+on_true = "jump"
+jump_address = 0x02052208 # the fog tail (Dq9CameraDistanceFog's hook)
+
 # Unlock camera rotation (the Game > Unlock camera rotation setting).
 # Handler: src/hooks/camera_rotation.cpp.
 #
