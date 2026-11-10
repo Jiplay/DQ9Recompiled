@@ -1,0 +1,54 @@
+# Mouse-friendly menus (the Game > Mouse-friendly menus setting), part 1:
+# the title and file select menus. Handler: src/hooks/mouse_menus.cpp.
+#
+# ov23 0x021F8E1C steps a grid menu (r10 = menu, r9 = its owner): cells at
+# menu+0x20 (u16 ids, menu+0x24 x menu+0x26 of them), cursor at menu+0x28 /
+# +0x2A. After the keypad it handles the pen: on a press edge (touch manager
+# 0x02114E54 +0x55) it reads the position (0x02012A94 into sp+0x34 / sp+0x30),
+# tests the page arrows (0x021F9DA8), then looks for the cell under the pen.
+# A selectable cell (type 8, the title and file select entries) that is not
+# selected yet (vtable +0xF8: bit 0 of cell+0x45, the green look) is selected
+# through 0x021F88B8, which deselects the others. Any other cell, or one
+# already selected, becomes the cursor (r5, r8, stored at 0x021F9648), and
+# only when it already was the cursor does the press choose it (sp+0x28 = 1
+# at 0x021F9620). So the first tap turns an entry green and the second
+# chooses it.
+#
+# With the setting on, a press chooses the cell at once, and while no button
+# is held the same code runs on the mouse position, without the page arrows
+# and the choice, so the entry under the mouse turns green.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov023"
+sha1 = "e5eb35da1da102a8907510472a7cc09db4d9c4c7"
+
+[[hook]]
+address = 0x021F9384      # cmp r1, #0 (r1 = press edge)
+mode = "arm"
+name = "Dq9MouseMenuGridPress"
+registers = ["r1"]
+
+[[hook]]
+address = 0x021F9398      # ldr r2, [sp, #0x34] (after bl 0x02012A94)
+mode = "arm"
+name = "Dq9MouseMenuGridPosition"
+registers = ["sp"]
+
+[[hook]]
+address = 0x021F93AC      # movs r6, r0 (r0 = page arrow under the pen)
+mode = "arm"
+name = "Dq9MouseMenuGridArrows"
+registers = ["r0"]
+
+[[hook]]
+address = 0x021F9608      # b 0x021F9638 (after bl 0x021F88B8: cell selected)
+mode = "arm"
+name = "Dq9MouseMenuGridSelected"
+registers = ["sp"]
+
+[[hook]]
+address = 0x021F961C      # moveq r0, #1 (Z = the cell is the cursor)
+mode = "arm"
+name = "Dq9MouseMenuGridChoose"
+registers = ["cpsr"]

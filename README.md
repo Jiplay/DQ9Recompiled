@@ -117,6 +117,15 @@ Shipped hooks:
   runner's presenter draws those layers into a smaller rect of the window
   (`nds_gpu2d_set_fixed_size_layers`), at any 3D resolution. The runner's
   OpenGL presenter and an open runtime menu show them unscaled.
+- **Mouse-friendly menus** (`mouse_menus.cpp`; `dq9_arm9_ov023.toml`): the
+  runtime menu's Game > Mouse-friendly menus (`[title] mouse_friendly`).
+  On the DS the first tap on a menu entry turns it green and the second
+  chooses it. On, the entry under the mouse turns green without a click
+  and one click chooses it; a resting mouse leaves the cursor to the
+  keypad. Each menu type has its own pen code and is hooked on its own:
+  so far the title and file select menus (overlay 23), which then run the
+  game's pen step on the mouse position the runner reports
+  (`nds_title_pointer_hover`). Off (the default) leaves the game untouched.
 - **Local wireless diagnostics** (`local_wireless_diag.cpp`;
   `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
   ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and
