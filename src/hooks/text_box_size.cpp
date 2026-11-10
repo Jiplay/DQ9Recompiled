@@ -23,6 +23,8 @@
 #include "title_hooks.h"
 #include "title_settings.h"
 
+#include "dq9_scene.h"
+
 namespace {
 
 constexpr const char* kChoices[] = {"Scale with window", "1x", "2x", "3x",
@@ -55,36 +57,12 @@ double UiScale() {
 constexpr int kAnchorX = 128;
 constexpr int kAnchorY = 96;
 
-// The overlay loader (0x020A1950) keeps the id loaded in each slot as a
-// signed byte at 0x01FFD364 + 6 * *(u32*)0x01FFD348 + slot (the slot of
-// overlay n is the word at 0x020E8F30 + 8n): slot 0 = overlays 0..6,
-// 1 = 7..14, 2 = 15..21, 3 = 22..30, 4 = 31..32, 5 = 33..34.
-constexpr uint32_t kOverlayBank = 0x01FFD348;
-constexpr uint32_t kOverlaySlots = 0x01FFD364;
-
-int LoadedOverlay(uint32_t slot) {
-    const uint32_t bank = bus_read_u32(kOverlayBank);
-    return static_cast<int8_t>(bus_read_u8(kOverlaySlots + 6 * bank + slot));
-}
-
-// Full-screen pages, left as on the DS. The battle records (camp menu >
-// Battle records, overlay 8 in slot 1; the field and the camp menu have
-// overlay 11 there) fill engine A with a wallpaper on BG1 (screen base 30),
-// draw the buttons, the cursor and "Back" as OBJs, and Stella and her
-// speech box in 3D on BG0, blended over BG1 (BLDCNT 0x0241, EVA 15 /
-// EVB 16). There is no window to keep small: splitting BG1 off shrinks the
-// wallpaper alone and covers the 3D with it, and the speech box would leave
-// Stella behind. Its Defeated Monster List loads overlay 14 in the same
-// slot and is a full-screen page too (a 3D monster over BG1, engine A on
-// the top LCD).
-constexpr uint32_t kMenuSlot = 1;
-constexpr int kRecordsOverlay = 8;
-constexpr int kMonsterListOverlay = 14;
-
-bool FullScreenPage() {
-    const int menu = LoadedOverlay(kMenuSlot);
-    return menu == kRecordsOverlay || menu == kMonsterListOverlay;
-}
+// Full-screen pages (dq9::FullScreenPage) are left as on the DS: there is
+// no window to keep small. Splitting their BG1 wallpaper off would shrink it
+// alone and cover the 3D blended over it, and Stella's 3D speech box would
+// leave her behind.
+using dq9::FullScreenPage;
+using dq9::LoadedOverlay;
 
 }  // namespace
 

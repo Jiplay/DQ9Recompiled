@@ -27,6 +27,8 @@
 #include "title_hooks.h"
 #include "title_settings.h"
 
+#include "dq9_scene.h"
+
 namespace {
 
 // Auto is 0: a fixed distance is never 0%.
@@ -58,7 +60,14 @@ constexpr int kAutoMaxPermille = 4000;
 
 // The distance to use, in thousandths of the game's own (1000 = untouched).
 // Headless (no window) Auto stays at 1000.
+//
+// Full-screen pages (dq9::FullScreenPage: the battle records, the Defeated
+// Monster List) stay at 1000 too. They are shown stretched as on the DS,
+// and their camera frames one model (Stella, the monster) beside the 2D
+// layout: moving it back shrinks the model toward the screen centre, away
+// from the place the page keeps for it.
 int CameraDistancePermille() {
+    if (dq9::FullScreenPage()) return 1000;
     const int value = nds_title_setting_value(kCameraDistanceId);
     if (value != kAuto) return value * 10;
     const int points = nds_title_display_height();
