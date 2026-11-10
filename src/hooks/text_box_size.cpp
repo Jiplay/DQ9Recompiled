@@ -155,6 +155,36 @@ NDS_TITLE_HOOK void Dq9TextBoxEnd() {
     bus_write_u32(kMtxPop, 1);
 }
 
+// The field's stylus arrow (0x02096C48, see config/hooks/dq9_arm9.toml):
+// shrunk like the 3D window, but each piece about its own anchor, so it
+// still runs from the press point to the pen. Every scale is written right
+// after one of the game's pushes, so the game's pops undo it.
+NDS_TITLE_HOOK void Dq9StylusArrowPiece() {
+    const int32_t k = TextBoxScale();
+    if (k >= kOne) return;
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(kOne));
+}
+
+// The shaft: thinner only, its length still reaches the head.
+NDS_TITLE_HOOK void Dq9StylusArrowShaft() {
+    const int32_t k = TextBoxScale();
+    if (k >= kOne) return;
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(kOne));
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(kOne));
+}
+
+// r0 = len - 5 px, the shaft's length under the head: the shrunk head
+// covers only 5k px of it.
+NDS_TITLE_HOOK void Dq9StylusArrowLength(uint32_t* length) {
+    const int32_t k = TextBoxScale();
+    if (k >= kOne) return;
+    *length = static_cast<uint32_t>(static_cast<int32_t>(*length) +
+                                    5 * (kOne - k));
+}
+
 // ---- 2D windows ------------------------------------------------------------
 // The other windows are text BGs on the main engine, and the presenter
 // scales those itself (nds_gpu2d_set_fixed_size_layers): the BGs are shown

@@ -189,6 +189,48 @@ address = 0x020D86E0      # G3_SwapBuffers entry (ldr r2, =0x04000540)
 mode = "arm"
 name = "Dq9WindowLayers"
 
+# The field's stylus arrow (0x02096C48(obj, x0, y0, x1, y1), from
+# 0x02096834): drawn with the 3D engine in the same pixel-space pass, from
+# the press point (x0, y0) to the pen. Push, translate to the press point,
+# then four pieces, each in its own push/pop:
+#   * the ring: push, translate (-8, -8), draw obj (0x020473D8);
+#   * push, rotate towards the pen (0x020C51B4), then the shaft: push,
+#     translate (0, 0, 1), push, scale (0.5, (len - 5) / 8, 1), draw
+#     obj+0x88 (0x020472F4);
+#   * the head: push, translate (0, len, 3), scale (0.75, -0.75, 1), draw
+#     obj+0x110;
+#   * the dot: push, translate (-4, -4, 2), draw obj+0x198.
+# (len at [sp], fx32.) The hooks shrink each piece about its own anchor with
+# the UI size (the ring and dot about the press point, the head about the
+# pen), the shaft in width only, and shorten the shaft by what the smaller
+# head no longer covers, so the arrow still runs from the press point to
+# the pen. Handler: src/hooks/text_box_size.cpp.
+[[hook]]
+address = 0x02096E18      # sub r0, r3, #0x8000 (ring: after its push)
+mode = "arm"
+name = "Dq9StylusArrowPiece"
+
+[[hook]]
+address = 0x02096EB0      # ldr r0, [sp] (shaft: after its last push)
+mode = "arm"
+name = "Dq9StylusArrowShaft"
+
+[[hook]]
+address = 0x02096EBC      # bl 0x020C2C04 (r0 = len - 5 px)
+mode = "arm"
+name = "Dq9StylusArrowLength"
+registers = ["r0"]
+
+[[hook]]
+address = 0x02096F10      # mov r0, #0xC00 (head: after its translate)
+mode = "arm"
+name = "Dq9StylusArrowPiece"
+
+[[hook]]
+address = 0x02096F48      # sub r0, r0, #0x4000 (dot: after its push)
+mode = "arm"
+name = "Dq9StylusArrowPiece"
+
 # Mouse-friendly menus (the Game > Mouse-friendly menus setting), part 2:
 # the window lists ("list A": camp menu and the other windowed lists).
 # Handler: src/hooks/mouse_menus.cpp.
