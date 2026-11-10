@@ -35,3 +35,27 @@ address = 0x0202E4F8      # ldr r0, =0x0210A250 (r1 = &position comes next)
 mode = "arm"
 name = "Dq9CameraDistance"
 registers = ["sp"]
+
+# Unlock camera rotation (the Game > Unlock camera rotation setting).
+# Handler: src/hooks/camera_rotation.cpp.
+#
+# 0x020A213C is the field camera's L/R control (r10 = camera). L (0x200)
+# adds a step to the yaw, R (0x100) subtracts one, both wrapped to
+# [0, 2pi) (2pi = 25736, 0x02030F40), and a yaw that lands in the band
+# (0xC91, 0x57F7) is clamped to its edge: the camera turns at most pi/4
+# (45 degrees) either way from the default. L+R together sets cam+0x245 bit
+# 1, which eases the yaw back to cam+0x246 the short way round; that path
+# is untouched. The hooks skip the clamp after each step.
+[[hook]]
+address = 0x020A2364      # cmp r6, r1 (L: r6 = new yaw, r1 = 0xC91)
+mode = "arm"
+name = "Dq9UnlockCameraRotation"
+on_true = "jump"
+jump_address = 0x020A2378 # mov r0, r10 ; bl 0x0202E6B8 (set yaw)
+
+[[hook]]
+address = 0x020A23C8      # cmp r6, r1 (R: r6 = new yaw, r1 = 0xC91)
+mode = "arm"
+name = "Dq9UnlockCameraRotation"
+on_true = "jump"
+jump_address = 0x020A23DC # mov r0, r10 ; bl 0x0202E6B8 (set yaw)

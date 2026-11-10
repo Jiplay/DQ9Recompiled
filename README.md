@@ -85,6 +85,11 @@ Shipped hooks:
   the game builds the view matrix, so it applies to the field, battles and
   cutscenes alike. 100% (the default) leaves the game untouched; the far
   plane does not move, so distant scenery can clip sooner when zoomed out.
+- **Unlock camera rotation** (`camera_rotation.cpp`; `dq9_arm9.toml`):
+  the runtime menu's Game > Unlock camera rotation (`[title]
+  unlock_camera_rotation`). L and R turn the field camera all the way round
+  instead of stopping 45 degrees either side of the default; L+R still
+  resets it. Off (the default) leaves the game untouched.
 - **Local wireless diagnostics** (`local_wireless_diag.cpp`;
   `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
   ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and
