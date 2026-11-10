@@ -95,3 +95,32 @@ mode = "arm"
 name = "Dq9UnlockCameraRotation"
 on_true = "jump"
 jump_address = 0x020A23DC # mov r0, r10 ; bl 0x0202E6B8 (set yaw)
+
+# Language (the Game > Language setting). Handler: src/hooks/language.cpp.
+#
+# The game reads the firmware language through OS_GetOwnerInfo (0x020C99D8,
+# user settings +0x64 bits 0-2 into info+0). 0x0200FB10 calls it before
+# every text file load, keeps the code (2-5, anything else becomes 1) in its
+# context at 0x020F33D8+5 and returns it; 0x020757C4 then replaces "<LG>" in
+# the file name with "en", "fr", "de", "it" or "es" (table at 0x020F0DA0).
+# So the first hook changes the language the game sees from then on.
+[[hook]]
+address = 0x020C99F8      # strb r2, [r4] (r2 = firmware language)
+mode = "arm"
+name = "Dq9Language"
+registers = ["r2"]
+
+# Text loaded once per session: overlay 17 sets up an arena (0x020E50FC,
+# descriptor at 0x02153680) and has 0x020E5124 reset it and load
+# article_<LG>.nat and strstd_<LG>.nat into two slots at 0x02153694. Every
+# other text table is loaded with the screen or object that uses it. At the
+# main loop's head (0x02000E2C: r0-r3, r12, lr and flags dead), when the
+# language in the context differs from the wanted one, the hook stores the
+# new one and calls 0x020E5124 again with lr = 0x02000E2C.
+[[hook]]
+address = 0x02000E2C      # mov r0, r7 (main loop head)
+mode = "arm"
+name = "Dq9LanguageReload"
+registers = ["lr"]
+on_true = "jump"
+jump_address = 0x020E5124 # reload the articles and standard strings

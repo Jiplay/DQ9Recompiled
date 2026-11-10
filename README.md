@@ -56,7 +56,7 @@ Then build the runner against the bank directory:
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
         -DNDS_RETAIL_BIOS_BANKS=OFF \
-        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp;$PWD/src/hooks/camera_zoom.cpp"
+        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp;$PWD/src/hooks/camera_zoom.cpp;$PWD/src/hooks/camera_rotation.cpp;$PWD/src/hooks/language.cpp"
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
@@ -92,6 +92,14 @@ Shipped hooks:
   unlock_camera_rotation`). L and R turn the field camera all the way round
   instead of stopping 45 degrees either side of the default; L+R still
   resets it. Off (the default) leaves the game untouched.
+- **Language** (`language.cpp`; `dq9_arm9.toml`): the runtime menu's
+  Game > Language (`[title] language`): System, English, French, German,
+  Italian or Spanish, with no restart. DQ9 reads the firmware language
+  each time it loads a text file; the hook gives it the chosen one instead,
+  and reloads the two tables it keeps for the whole session (articles and
+  standard strings) on the next frame. A menu that is already open
+  switches when it is reopened. System (the default) leaves the game
+  untouched, on `[system] language` from `game.toml`.
 - **Local wireless diagnostics** (`local_wireless_diag.cpp`;
   `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
   ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and
