@@ -36,6 +36,20 @@ mode = "arm"
 name = "Dq9CameraDistance"
 registers = ["sp"]
 
+# Depth precision with the camera distance. Z-buffer depth goes as
+# near / distance^2, so a camera moved back loses the small depth gaps that
+# keep decals (windows on roofs, paths on the ground) in front of what they
+# sit on. The projection is built at 0x0202E138 (MTX_PerspectiveW, r3 =
+# near from cam+0x68, r4 = camera; position cam+0x120 and target cam+0x12C
+# are final by then). The hook moves the near plane out with the camera;
+# cam+0x68 itself is not changed. Dq9CameraDistanceFog undoes it when it
+# maps depths back to the game's projection.
+[[hook]]
+address = 0x0202E138      # bl MTX_PerspectiveW
+mode = "arm"
+name = "Dq9CameraDistanceNear"
+registers = ["r3", "r4"]
+
 # The fog half of the camera distance setting. 0x02051D38 (per frame, r7 =
 # environment block) has 0x02051254 fill r7+0x4C from the map's fog presets
 # (interpolated over time of day): mode +0x50, shift +0x54, offset +0x58,

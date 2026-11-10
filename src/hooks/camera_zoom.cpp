@@ -11,10 +11,17 @@
 // dungeons, battles and cutscenes. The far plane is not moved, so very
 // distant scenery can clip sooner when zoomed out.
 //
+// Moving the camera back also costs depth precision: Z-buffer depth goes as
+// near / distance^2, so at 2x a decal lifted off a roof or a wall is a
+// quarter as far from it in depth, and the depth test starts hiding parts of
+// it (visible from about 150%). Dq9CameraDistanceNear moves the near plane
+// out with the camera, which gives that precision back.
+//
 // Moving the camera back pushes every pixel deeper, so the hardware fog
 // (a fixed depth curve from the map's presets) would thicken over the whole
 // scene. Dq9CameraDistanceFog reshapes that curve so each pixel gets the fog
 // it would have had at 100%.
+#include <algorithm>
 #include <cmath>
 
 #include "title_hooks.h"
@@ -110,7 +117,53 @@ double FogDensity(const uint8_t* table, double offset, int shift,
     return table[k - 1] * (1 - frac) + table[k] * frac;
 }
 
+// Camera fields read when the projection is built (0x0202E138).
+constexpr uint32_t kCamPosition = 0x120;
+constexpr uint32_t kCamTarget = 0x12C;
+
+// How far the near plane may move out: this share of the dolly. Whatever
+// was in front of the original camera is at least the dolly farther from
+// the moved one, so nothing that was drawn gets cut by the near plane.
+constexpr double kNearShareOfDolly = 0.5;
+
+// The near plane for a camera moved to `k` times its distance `target` from
+// what it looks at (world units, k > 1). Depth precision at the target goes
+// as near / distance^2, so k^2 times the near plane keeps it as it was at
+// 100%, as far as the dolly allows.
+double MovedNear(double near, double k, double target) {
+    return std::min(near * k * k, near + kNearShareOfDolly * (k - 1) * target);
+}
+
+// The inverse: the game's near plane from the moved one.
+double OriginalNear(double moved, double k, double target) {
+    const double scaled = moved / (k * k);
+    if (scaled * k * k <= scaled + kNearShareOfDolly * (k - 1) * target)
+        return scaled;
+    return moved - kNearShareOfDolly * (k - 1) * target;
+}
+
 }  // namespace
+
+// Before `bl MTX_PerspectiveW` at 0x0202E138 (r3 = near, r4 = camera): the
+// projection with the near plane moved out with the camera (see
+// MovedNear). The far plane and the field of view are the game's.
+NDS_TITLE_HOOK void Dq9CameraDistanceNear(uint32_t* r3, uint32_t* r4) {
+    const int permille = CameraDistancePermille();
+    if (permille <= 1000) return;
+    const double k = permille / 1000.0;
+    double target = 0;
+    for (uint32_t axis = 0; axis < 3; ++axis) {
+        const double d =
+            double(static_cast<int32_t>(bus_read_u32(*r4 + kCamPosition + axis * 4u))) -
+            static_cast<int32_t>(bus_read_u32(*r4 + kCamTarget + axis * 4u));
+        target += d * d;
+    }
+    target = std::sqrt(target) / 4096.0;
+    const double near = static_cast<int32_t>(*r3) / 4096.0;
+    if (near <= 0 || target <= 0) return;
+    const double moved = MovedNear(near, k, target);
+    *r3 = static_cast<uint32_t>(static_cast<int32_t>(std::lround(moved * 4096.0)));
+}
 
 // Before `ldr r0, =0x0210A250` at 0x0202E4F8: sp+0xFC is the camera
 // position and sp+0xF0 its target, three fx32 words each.
@@ -204,7 +257,20 @@ NDS_TITLE_HOOK void Dq9CameraDistanceFog(uint32_t* r7) {
     // original distance, and every view depth grew by the difference.
     const double dolly =
         std::sqrt(moved) / 4096.0 * (permille - 1000) / permille;
-    if (map.b <= 0 || dolly == 0) return;
+    if (map.b <= 0 || map.a <= 1 || dolly == 0) return;
+
+    // The depth map of the game's own projection: Dq9CameraDistanceNear
+    // moved the near plane out (z = a - b / dist with a = (f + n) / (f - n),
+    // b = 2 f n / (f - n); the far plane is the game's).
+    DepthMap old_map = map;
+    if (permille > 1000) {
+        const double k = permille / 1000.0;
+        const double far = map.b / (map.a - 1);
+        const double near = OriginalNear(map.b / (map.a + 1), k,
+                                         std::sqrt(moved) / 4096.0 / k);
+        if (near <= 0 || near >= far) return;
+        old_map = {(far + near) / (far - near), 2 * far * near / (far - near)};
+    }
 
     const uint32_t block = *r7;
     const int shift = word(block + kFogShiftOffset) & 0xF;
@@ -214,11 +280,11 @@ NDS_TITLE_HOOK void Dq9CameraDistanceFog(uint32_t* r7) {
         table[k] = bus_read_u8(block + kFogTableOffset + k) & 0x7F;
 
     const auto to_new = [&](double depth) {
-        return map.depth(map.distance(depth) + dolly);
+        return map.depth(old_map.distance(depth) + dolly);
     };
     const auto to_old = [&](double depth) {
         const double dist = map.distance(depth) - dolly;
-        return dist > 0 ? map.depth(dist) : -INFINITY;
+        return dist > 0 ? old_map.depth(dist) : -INFINITY;
     };
 
     // The old curve only changes between entry 0 and entry 31.
