@@ -20,3 +20,6 @@ __pycache__/
 /DQ9Recomp.exe
 /*.zip
 /*.tar.gz
+
+# scripts/gen-lang.py output.
+/src/hooks/lang.generated.h

@@ -1,0 +1,7 @@
+# Text the hooks add to the game, one table per screen. Every language needs
+# every key; a missing one falls back to English. Codes are the languages
+# DQ9 has text for (en fr de it es); scripts/gen-lang.py embeds them.
+name = "English"
+
+[main_menu]
+options = "Options"

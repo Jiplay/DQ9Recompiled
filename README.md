@@ -57,6 +57,7 @@ Then build the runner against the bank directory:
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
         -DNDS_RETAIL_BIOS_BANKS=OFF \
         "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp;$PWD/src/hooks/camera_zoom.cpp;$PWD/src/hooks/camera_rotation.cpp;$PWD/src/hooks/language.cpp;$PWD/src/hooks/text_box_size.cpp"
+    python3 scripts/gen-lang.py
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
@@ -70,6 +71,13 @@ mid-instruction hooks baked in (schema and semantics:
 to the runner configure as an absolute, semicolon-separated
 `NDS_TITLE_HOOK_SOURCES` list. A manifest whose name is not a bank fails the
 configure, and a missing handler fails the runner link.
+
+Text the hooks add to the game lives in `res/lang/<code>.toml` (en, fr, de,
+it, es: the languages DQ9 has text for), one table per screen; a key a
+language lacks falls back to English. `scripts/gen-lang.py` embeds them into
+`src/hooks/lang.generated.h` (gitignored; `scripts/build.py` runs it), the
+hooks read them with `dq9::Tr()` (`src/hooks/lang.h`), and
+`scripts/check-lang.py` checks every language against English.
 
 Shipped hooks:
 
@@ -126,6 +134,10 @@ Shipped hooks:
   so far the title and file select menus (overlay 23), which then run the
   game's pen step on the mouse position the runner reports
   (`nds_title_pointer_hover`). Off (the default) leaves the game untouched.
+- **Options row** (`options_row.cpp`; `dq9_arm9_ov004.toml`): the main
+  menu's "Configure Nintendo Wi-Fi Connection Settings" row (the service
+  is gone) becomes "Options", without the WFC icon, in the language the
+  game shows its text in. Choosing it does nothing yet. Always on.
 - **Local wireless diagnostics** (`local_wireless_diag.cpp`;
   `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
   ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and

@@ -1,0 +1,90 @@
+# The main menu's "Configure Nintendo Wi-Fi Connection Settings" row becomes
+# an "Options" row (Nintendo WFC is gone), and the WFC icon next to it stays
+# hidden. Handler: src/hooks/options_row.cpp; the text is res/lang/*.toml
+# [main_menu] options.
+#
+# ov4 0x0216C810 opens the main menu. The mode in 0x02171034+3 picks the
+# rows, built by 0x0216B498(scene, rows, 0) with 0x0216AFB0(scene, cell, 1,
+# 210, text, x, y, 10, enabled):
+#   rows 1 (modes 1 and 5): cells 50, 51, 52 (text 2, 3, 60) in grid 302;
+#   rows 2 (mode 2): cells 50, 51 (text 1, 60) in grid 301;
+#   rows 3 (mode 3): cell 50 (text 2).
+# The last row of rows 1 and 2 (text 60) is the WFC one: 0x0216B390 moves
+# the icon (cell 12) next to it, the menu clears the icon's hidden bit
+# (cell+0xC bit 3) in modes 1, 2 and 5, and gives the row action 10 through
+# its vtable +0x44 and +0x7C (the grid step, ov23 0x021F8E1C, sends a
+# positive action to the scene when the row is chosen).
+#
+# 0x0216AFB0 sets up an entry cell with 0x021F89F4: +0x34 the layer (210),
+# +0x38 the text id, looked up in string table 0x192 when +0x20 (a string
+# pointer, 0 here) is null (draw: ov23 0x021F8240). The hook gives the WFC
+# row its own string instead. Its action becomes 0, so choosing the row
+# does nothing for now.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov004"
+sha1 = "1b3b9cda9b181469db1015bae28aff5c1f168149"
+
+[[hook]]
+address = 0x0216B04C      # mov r0, r8 (after bl 0x021F89F4; r4 = the cell)
+mode = "arm"
+name = "Dq9OptionsRowText"
+registers = ["r4"]
+
+# The icon: Z set skips `bicne` / `strbne` (the flags come from
+# `cmp r0, #0` on the icon cell).
+[[hook]]
+address = 0x0216C904      # mode 1
+mode = "arm"
+name = "Dq9OptionsRowHideIcon"
+registers = ["cpsr"]
+
+[[hook]]
+address = 0x0216CA70      # mode 2
+mode = "arm"
+name = "Dq9OptionsRowHideIcon"
+registers = ["cpsr"]
+
+[[hook]]
+address = 0x0216CC1C      # mode 5
+mode = "arm"
+name = "Dq9OptionsRowHideIcon"
+registers = ["cpsr"]
+
+# The action: r1 = 10 for the vtable +0x44 / +0x7C calls on the row.
+[[hook]]
+address = 0x0216C9D0      # mode 1, cell 52, blx +0x44
+mode = "arm"
+name = "Dq9OptionsRowAction"
+registers = ["r1"]
+
+[[hook]]
+address = 0x0216C9E4      # mode 1, cell 52, blx +0x7C
+mode = "arm"
+name = "Dq9OptionsRowAction"
+registers = ["r1"]
+
+[[hook]]
+address = 0x0216CB28      # mode 2, cell 51, blx +0x44
+mode = "arm"
+name = "Dq9OptionsRowAction"
+registers = ["r1"]
+
+[[hook]]
+address = 0x0216CB3C      # mode 2, cell 51, blx +0x7C
+mode = "arm"
+name = "Dq9OptionsRowAction"
+registers = ["r1"]
+
+[[hook]]
+address = 0x0216CCE8      # mode 5, cell 52, blx +0x44
+mode = "arm"
+name = "Dq9OptionsRowAction"
+registers = ["r1"]
+
+[[hook]]
+address = 0x0216CCFC      # mode 5, cell 52, blx +0x7C
+mode = "arm"
+name = "Dq9OptionsRowAction"
+registers = ["r1"]

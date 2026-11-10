@@ -131,6 +131,8 @@ def build_runner(args, compilers):
     # Hooks are baked into the banks unless --no-hooks, and then the runner
     # must link their handlers (a missing one fails the link).
     if not args.no_hooks:
+        # The hooks' own text (res/lang/*.toml -> src/hooks/lang.generated.h).
+        run([sys.executable, os.path.join("scripts", "gen-lang.py")])
         hooks_dir = os.path.join("src", "hooks")
         hooks = sorted(cmake_path(os.path.join(hooks_dir, f))
                        for f in os.listdir(hooks_dir) if f.endswith(".cpp"))
