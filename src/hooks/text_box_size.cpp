@@ -202,6 +202,15 @@ bool InGame() {
     return LoadedOverlay(kTitleSlot) != kTitleOverlay && !FullScreenPage();
 }
 
+// Whether a 2D window is up on engine A: every one turns BG2 on (the 2D
+// message box uses BG2 + BG3, the camp menu BG1 + BG2), while the field
+// walk and battle show only BG1, on but empty.
+bool Window2dShown() {
+    constexpr uint32_t kDispcntA = 0x04000000;
+    constexpr uint32_t kBg2Bg3 = 0x0C00;
+    return (bus_read_u32(kDispcntA) & kBg2Bg3) != 0;
+}
+
 }  // namespace
 
 // G3_SwapBuffers entry, once per 3D frame.
@@ -210,6 +219,7 @@ NDS_TITLE_HOOK void Dq9WindowLayers() {
     if (scale >= 1.0 || !InGame()) {
         nds_gpu2d_set_fixed_size_layers(0, 1.0f, 0, 0);
         nds_title_set_unscaled_touch_rect(0, 0, 0, 0);
+        nds_title_set_touch_unscaled(false);
     } else {
         nds_gpu2d_set_fixed_size_layers(kWindowBgs, static_cast<float>(scale),
                                         kAnchorX, kAnchorY);
@@ -218,5 +228,10 @@ NDS_TITLE_HOOK void Dq9WindowLayers() {
         // not be mapped back through the scale. The corner is generous; the
         // frontend only honours it where the scaled UI is not shown.
         nds_title_set_unscaled_touch_rect(176, 0, 256, 40);
+        // With no 2D window up (the field walk) the whole touchscreen is
+        // the walking stick, drawn and read at the DS's full size: the
+        // split layers are empty, so a touch must not be pulled through
+        // their scale towards the centre.
+        nds_title_set_touch_unscaled(!Window2dShown());
     }
 }
