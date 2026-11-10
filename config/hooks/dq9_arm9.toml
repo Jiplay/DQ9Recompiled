@@ -178,6 +178,24 @@ address = 0x0204453C      # pop {r4, pc}
 mode = "arm"
 name = "Dq9TextBoxEnd"
 
+# Choice windows drawn on their own, outside the message manager's draw:
+# 0x0205C97C(list, frame_drawn) draws the frame (0x0202F414), each entry's
+# text (0x02045F4C -> 0x020417C0, immediate 3D like the message window) and
+# places the cursor (an OBJ, scaled with the 2D layers). Callers: ov13
+# 0x02184A88 (Yes/No on leaving skill point allocation), ov17 0x021AFA94,
+# ov20 0x0218C974. The same pair as above, after the prologue and at its
+# only exit.
+[[hook]]
+address = 0x0205C984      # mov r10, r0 (after push / sub sp)
+mode = "arm"
+name = "Dq9TextBoxBegin"
+registers = ["r4"]
+
+[[hook]]
+address = 0x0205CB5C      # add sp, sp, #0x28 (single exit)
+mode = "arm"
+name = "Dq9TextBoxEnd"
+
 # The 2D windows (message manager in 2D mode, camp menu) are engine A text
 # BGs; the presenter shows them at the fixed size
 # (nds_gpu2d_set_fixed_size_layers). Once per 3D frame the handler sets

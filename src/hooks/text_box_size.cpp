@@ -150,7 +150,8 @@ NDS_TITLE_HOOK void Dq9InteractPrompt() {
     ScaleAboutCentre();
 }
 
-// Before each `pop {r4, pc}` that follows a Dq9TextBoxBegin.
+// Before each `pop {r4, pc}` that follows a Dq9TextBoxBegin, and at the
+// exit of the choice window draw 0x0205C97C (also wrapped).
 NDS_TITLE_HOOK void Dq9TextBoxEnd() {
     bus_write_u32(kMtxPop, 1);
 }
