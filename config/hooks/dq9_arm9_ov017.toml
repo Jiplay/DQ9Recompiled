@@ -1,0 +1,18 @@
+# UI size, part 2: the interaction prompt. Handler:
+# src/hooks/text_box_size.cpp (part 1 is in dq9_arm9.toml).
+version = 1
+
+[program]
+bank = "dq9_arm9_ov017"
+sha1 = "9bed6c63eb674c6289670751193cff269085fa8b"
+
+# The interaction prompt (the icon shown when the player can talk to an NPC
+# or check an object). ov17 0x0219B33C keeps the best target's icon index at
+# field+0x36B5; 0x0219AD84 (the same pixel-space pass) draws that sprite at
+# its fixed screen position between its own MTX_PUSH (0x0219B084) and
+# MTX_POP (0x0219B0A0). The hook, at the animation step between them,
+# scales the pushed matrix about the screen centre.
+[[hook]]
+address = 0x0219B088      # bl 0x0204725C (step the icon's animation)
+mode = "arm"
+name = "Dq9InteractPrompt"

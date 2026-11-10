@@ -106,12 +106,8 @@ int32_t TextBoxScale() {
     return k < kOne ? k : kOne;
 }
 
-}  // namespace
-
-// Before each `bl 0x02066D00` in 0x020444F0 (r4 = message manager): push the
-// position matrix and scale the window about the centre.
-NDS_TITLE_HOOK void Dq9TextBoxBegin(uint32_t*) {
-    bus_write_u32(kMtxPush, 0);
+// Multiplies the scale about the centre into the current position matrix.
+void ScaleAboutCentre() {
     const int32_t k = TextBoxScale();
     if (k >= kOne) return;
     // p' = a + k (p - a): translate by a (1 - k), then scale by k.
@@ -121,6 +117,28 @@ NDS_TITLE_HOOK void Dq9TextBoxBegin(uint32_t*) {
     bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
     bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
     bus_write_u32(kMtxScale, static_cast<uint32_t>(kOne));
+}
+
+}  // namespace
+
+// Before each `bl 0x02066D00` in 0x020444F0 (r4 = message manager): push the
+// position matrix and scale the window about the centre.
+NDS_TITLE_HOOK void Dq9TextBoxBegin(uint32_t*) {
+    bus_write_u32(kMtxPush, 0);
+    ScaleAboutCentre();
+}
+
+// The interaction prompt: the icon shown when the player can talk to an NPC
+// or check an object. ov17 0x0219B33C keeps the best target's icon index at
+// field+0x36B5, and 0x0219AD84 (same pixel-space pass, right after the
+// message window) draws that icon sprite (field + 0x2B90 + 0x88 * index) at
+// its fixed screen position: the game pushes the matrix (0x0219B084), steps
+// the animation (0x0204725C), draws (0x020473D8, which translates to the
+// sprite's position and scales relative to the current matrix) and pops
+// (0x0219B0A0). The hook, at the animation step, scales the pushed matrix
+// about the centre like the message window; the game's own pop undoes it.
+NDS_TITLE_HOOK void Dq9InteractPrompt() {
+    ScaleAboutCentre();
 }
 
 // Before each `pop {r4, pc}` that follows a Dq9TextBoxBegin.
