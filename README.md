@@ -135,8 +135,9 @@ one folder:
 
 `settings.toml` holds the settings and is meant to be edited by hand; the Esc
 menu writes its changes back to it, keeping your comments. The save is
-`saves/DQ9Recomp.sav`, and savestates, performance logs and coverage manifests
-sit alongside it. The game only asks for the ROM: it runs on FreeBIOS with a
+`saves/DQ9Recomp.sav`, with savestates alongside it. Logs (the console
+output, performance logs and coverage manifests) always go to `logs/` next to
+the executable. The game only asks for the ROM: it runs on FreeBIOS with a
 generated firmware, so there are no BIOS or firmware dumps to find.
 
 Any other command line (`nds_runner <bios dir> --rom ...`) behaves as before
