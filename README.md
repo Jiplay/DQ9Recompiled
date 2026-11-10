@@ -60,9 +60,8 @@ Then build the runner against the bank directory:
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
-7 GB host. Tier-3 coverage manifests can still be merged into
-`coverage/entry-points.json` (`tools/promote_main_coverage.py`); the bank
-build keeps those seeds on top of the static scan.
+7 GB host. The banks come from the static scan alone: there is no list of
+entry points recorded from gameplay to maintain.
 
 ### Hooks
 A bank with a manifest at `config/hooks/<bank>.toml` is generated with those

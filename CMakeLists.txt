@@ -19,8 +19,6 @@ set(DQ9_ROM "${CMAKE_CURRENT_SOURCE_DIR}/dq9.nds" CACHE FILEPATH
 set(DQ9_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/generated")
 set(DQ9_INPUT_DIR "${DQ9_GENERATED_DIR}/inputs")
 set(DQ9_RECOMP_DIR "${DQ9_GENERATED_DIR}/recomp")
-# Optional Tier-3 coverage seeds (same JSON schema as the MPH project).
-set(DQ9_COVERAGE_SEEDS "${CMAKE_CURRENT_SOURCE_DIR}/coverage/entry-points.json")
 
 if(WIN32)
     set(_py "${CMAKE_CURRENT_SOURCE_DIR}/.venv/Scripts/python.exe")
@@ -38,18 +36,12 @@ set(DQ9_PREP_OUTPUTS
     "${DQ9_INPUT_DIR}/arm9.bin" "${DQ9_INPUT_DIR}/arm7.bin"
     "${DQ9_INPUT_DIR}/arm9.toml" "${DQ9_INPUT_DIR}/arm7.toml"
     "${DQ9_INPUT_DIR}/overlays.json")
-set(_cov_arg)
-set(_cov_dep)
-if(EXISTS "${DQ9_COVERAGE_SEEDS}")
-    set(_cov_arg --coverage "${DQ9_COVERAGE_SEEDS}")
-    set(_cov_dep "${DQ9_COVERAGE_SEEDS}")
-endif()
 add_custom_command(
     OUTPUT ${DQ9_PREP_OUTPUTS}
     COMMAND "${DQ9_PYTHON}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_dq9.py"
-            --rom "${DQ9_ROM}" --out "${DQ9_INPUT_DIR}" ${_cov_arg}
+            --rom "${DQ9_ROM}" --out "${DQ9_INPUT_DIR}"
     DEPENDS "${DQ9_ROM}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_dq9.py"
-            "${CMAKE_CURRENT_SOURCE_DIR}/tools/ov029_unprotect.py" ${_cov_dep}
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/ov029_unprotect.py"
     COMMENT "Verifying YDQP and preparing main/overlay code images")
 add_custom_target(dq9_prepare DEPENDS ${DQ9_PREP_OUTPUTS})
 
@@ -105,16 +97,16 @@ endif()
 
 # Whole-ROM static analysis (tools/static_scan_dq9.py, ~10 s, no gameplay):
 # every image is scanned with `nds_recompile --static-scan` and the images
-# exchange cross-image call targets until the set converges. Coverage seeds
-# in the main configs are kept (--keep-seeds), so the banks are a superset of
-# both. Outputs are rewritten only when their content changes.
+# exchange cross-image call targets until the set converges. The banks are
+# built from this scan alone, starting from the ROM entry points. Outputs are
+# rewritten only when their content changes.
 set(DQ9_ANALYSIS_DIR "${DQ9_GENERATED_DIR}/analysis")
 set(DQ9_ANALYSIS_MANIFEST "${DQ9_ANALYSIS_DIR}/manifest.json")
 add_custom_command(
     OUTPUT "${DQ9_ANALYSIS_MANIFEST}"
     COMMAND "${DQ9_PYTHON}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/static_scan_dq9.py"
             --recompiler $<TARGET_FILE:nds_recompile>
-            --inputs "${DQ9_INPUT_DIR}" --out "${DQ9_ANALYSIS_DIR}" --keep-seeds
+            --inputs "${DQ9_INPUT_DIR}" --out "${DQ9_ANALYSIS_DIR}"
     DEPENDS nds_recompile ${DQ9_PREP_OUTPUTS} ${_fw_dep}
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/static_scan_dq9.py"
     COMMENT "Static whole-ROM scan of YDQP (main, ARM7, overlays, firmware)")
