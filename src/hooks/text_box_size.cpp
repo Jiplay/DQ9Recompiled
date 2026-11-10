@@ -185,6 +185,25 @@ NDS_TITLE_HOOK void Dq9StylusArrowLength(uint32_t* length) {
                                     5 * (kOne - k));
 }
 
+// r0 = the pen's distance from the press point, about to be compared with
+// 8 px: dividing it by k makes the dead zone 8k px.
+NDS_TITLE_HOOK void Dq9StylusDeadZone(uint32_t* distance) {
+    const int32_t k = TextBoxScale();
+    if (k >= kOne) return;
+    const int64_t d = static_cast<int32_t>(*distance);
+    const int64_t scaled = d * kOne / k;
+    *distance = static_cast<uint32_t>(scaled > INT32_MAX ? INT32_MAX
+                                                         : scaled);
+}
+
+// r0 = 8 px, the arrow's length inside the dead zone: 8k px with it.
+NDS_TITLE_HOOK void Dq9StylusArrowStub(uint32_t* length) {
+    const int32_t k = TextBoxScale();
+    if (k >= kOne) return;
+    *length = static_cast<uint32_t>(
+        static_cast<int64_t>(static_cast<int32_t>(*length)) * k / kOne);
+}
+
 // ---- 2D windows ------------------------------------------------------------
 // The other windows are text BGs on the main engine, and the presenter
 // scales those itself (nds_gpu2d_set_fixed_size_layers): the BGs are shown

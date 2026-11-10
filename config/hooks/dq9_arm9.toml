@@ -231,6 +231,29 @@ address = 0x02096F48      # sub r0, r0, #0x4000 (dot: after its push)
 mode = "arm"
 name = "Dq9StylusArrowPiece"
 
+# The stylus dead zone, shrunk with the arrow: the field walks
+# (0x02038148) and the arrow points at the pen (0x020968E0) only once the
+# pen is 8 px from the press point. Below that the arrow is an 8 px stub
+# along the hero's facing (0x02096D7C). The hooks scale the distance for
+# the comparison only (it is already stored for the drawing) and the stub.
+[[hook]]
+address = 0x02038324      # cmp r0, #0x8000 (r0 = pen distance, walk)
+mode = "arm"
+name = "Dq9StylusDeadZone"
+registers = ["r0"]
+
+[[hook]]
+address = 0x02096A1C      # cmp r0, #0x8000 (r0 = pen distance, arrow)
+mode = "arm"
+name = "Dq9StylusDeadZone"
+registers = ["r0"]
+
+[[hook]]
+address = 0x02096D80      # str r0, [sp] (r0 = 0x8000, stub length)
+mode = "arm"
+name = "Dq9StylusArrowStub"
+registers = ["r0"]
+
 # Mouse-friendly menus (the Game > Mouse-friendly menus setting), part 2:
 # the window lists ("list A": camp menu and the other windowed lists).
 # Handler: src/hooks/mouse_menus.cpp.
