@@ -147,7 +147,9 @@ NDS_TITLE_HOOK void Dq9TextBoxEnd() {
 // it composes the frame. Presentation only: nothing reaches the guest.
 namespace {
 
-constexpr uint8_t kWindowBgs = 0x0E;  // BG1..BG3
+// BG1..BG3, and the OBJs: the menu cursors are OBJs drawn over the windows
+// (the presenter takes OBJs only on frames that split a BG).
+constexpr uint8_t kWindowBgs = 0x1E;
 
 // Only in the game proper (field, battle, camp menu). The boot sequence and
 // the title menu draw their art on the same BGs and are left as on the DS.
