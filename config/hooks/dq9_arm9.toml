@@ -139,7 +139,7 @@ registers = ["lr"]
 on_true = "jump"
 jump_address = 0x020E5124 # reload the articles and standard strings
 
-# Text box size (the Game > Text box size setting).
+# UI size (the Game > UI size setting).
 # Handler: src/hooks/text_box_size.cpp.
 #
 # The field draw (ov17 0x021960B8) sets a pixel-space orthographic
@@ -151,11 +151,11 @@ jump_address = 0x020E5124 # reload the articles and standard strings
 # the inline choice list (0x02044540 -> 0x0205C97C) and the prompt. Each
 # piece pushes the position matrix, translates to its pixel position at
 # z = 1024 (the near plane) and pops, so the hooks wrap both calls in a
-# push, a scale about the window's anchor and a pop.
+# push, a scale about the screen centre and a pop.
 # With a render target at manager+0x38 (the 0x02044514 path) the window is
 # drawn, then the target's own draws 0x020E2404 / 0x020E2488 run; the pop
-# comes after those. The title menu, camp menu and battle results are 2D
-# layers and do not come through here.
+# comes after those. The 2D-mode message box and the camp menu are 2D
+# layers and do not come through here (see Dq9WindowLayers below).
 [[hook]]
 address = 0x02044514      # mov r0, r4 (before bl 0x02066D00, target path)
 mode = "arm"
@@ -177,3 +177,12 @@ registers = ["r4"]
 address = 0x0204453C      # pop {r4, pc}
 mode = "arm"
 name = "Dq9TextBoxEnd"
+
+# The 2D windows (message manager in 2D mode, camp menu) are engine A text
+# BGs; the presenter shows them at the fixed size
+# (nds_gpu2d_set_fixed_size_layers). Once per 3D frame the handler sets
+# BGs 1..3 and the scale about the screen centre.
+[[hook]]
+address = 0x020D86E0      # G3_SwapBuffers entry (ldr r2, =0x04000540)
+mode = "arm"
+name = "Dq9WindowLayers"

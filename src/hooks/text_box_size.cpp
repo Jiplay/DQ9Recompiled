@@ -1,10 +1,64 @@
-// Text box size: keeps DQ9's message window the size it has in the default
-// 2x window instead of filling the lower half of the screen however big the
-// window is (Game > Text box size, [title] text_box_size in settings.toml).
-// See config/hooks/dq9_arm9.toml for the guest code.
+// UI size: shows DQ9's windows (message boxes, menus) at a fixed size in
+// window points instead of stretching them with the screen, so a big window
+// shows more of the scene around them (Game > UI size, [title] ui_size in
+// settings.toml). See config/hooks/dq9_arm9.toml for the guest code.
 //
-// The message window is drawn with the 3D engine, in a pixel-space pass:
-// the field (and battle) draw sets an orthographic projection of the DS
+// The size is a multiple of the DS screen: at "2x" the UI is as big as in a
+// 384-point-tall window (the default 2x window), whatever the window size.
+// The scale k is (192 * n) / the main screen's height in window points, and
+// never above 1: a window smaller than that shows the UI as on the DS.
+// Everything scales about the screen centre (DS x 128, y 96), so the layout
+// between the windows stays as on the DS and the UI stays in the middle of
+// the scene. "Scale with window" turns it off.
+//
+// DQ9 draws its windows in two ways, handled separately below:
+//   * 3D: the message manager in 3D mode draws its window with the 3D
+//     engine, in a pixel-space pass (field and battle).
+//   * 2D: the message manager in 2D mode and the camp menu draw into the
+//     main engine's text BGs.
+#include <cstdint>
+
+#include "gpu2d.h"
+#include "gpu3d.h"
+#include "title_hooks.h"
+#include "title_settings.h"
+
+namespace {
+
+constexpr const char* kChoices[] = {"Scale with window", "1x", "2x", "3x",
+                                    "4x"};
+
+constexpr NdsTitleSetting kUiSize = {
+    "ui_size",
+    "UI size",
+    "Shows the text boxes and menus at a fixed size, as big as on a screen "
+    "this many times the DS screen, so a big window shows more of the scene "
+    "around them. Scale with window stretches them with the screen, as on "
+    "the DS. The 3D text boxes shrink only with a 3D resolution above 1x.",
+    0, 4, 1,
+    kChoices, sizeof(kChoices) / sizeof(kChoices[0]), nullptr,
+    2,
+};
+
+const int kUiSizeId = nds_title_setting_register(&kUiSize);
+
+// The scale about the screen centre: 1 = unchanged.
+double UiScale() {
+    const int multiple = nds_title_setting_value(kUiSizeId);
+    if (multiple <= 0) return 1.0;
+    const int reference = 192 * multiple;
+    const int points = nds_title_display_height();
+    if (points <= reference) return 1.0;
+    return static_cast<double>(reference) / static_cast<double>(points);
+}
+
+constexpr int kAnchorX = 128;
+constexpr int kAnchorY = 96;
+
+}  // namespace
+
+// ---- 3D message window -----------------------------------------------------
+// The field (and battle) draw sets an orthographic projection of the DS
 // screen (G3_OrthoW 0..256 x 0..192, near -1024, far 1024) and then
 // 0x020444F0 draws the message manager. Every piece of the window (the
 // frame's border cells, the dark background, each glyph, the inline choice
@@ -12,16 +66,10 @@
 // z = 1024 (the near plane) and pops it again, so all of it is relative to
 // the position matrix current when the manager is drawn.
 //
-// Dq9TextBoxBegin pushes that matrix and multiplies a scale about an anchor
-// into it, Dq9TextBoxEnd pops it. The anchor is the screen's bottom centre
-// (DS x 128, y 192), so the box keeps its bottom margin; a window placed in
-// the top half anchors at the top centre instead. Only the message window
-// shrinks: fades, HUD sprites and emotion balloons in the same pass are drawn
-// outside that call.
-//
-// The scale k is 384 / the main screen's height in window points, so the box
-// keeps its 2x size, like Auto camera distance (camera_zoom.cpp) keeps the
-// characters'. Two limits:
+// Dq9TextBoxBegin pushes that matrix and multiplies the scale about the
+// centre into it, Dq9TextBoxEnd pops it. Only the message window shrinks:
+// fades, HUD sprites and emotion balloons in the same pass are drawn outside
+// that call. Two limits:
 //   * Only while the 3D renders above 1x. The game's own geometry changes, so
 //     the native image shrinks too, and at 1x (or with HD off) a 4K window
 //     would show a box of a few dozen DS pixels.
@@ -38,33 +86,7 @@
 // These hooks write GX matrix commands (0x04000444 and on). That is what the
 // game itself does around each piece of the window, through the same FIFO;
 // the hooks add at most four commands a frame.
-#include <cstdint>
-
-#include "gpu3d.h"
-#include "title_hooks.h"
-#include "title_settings.h"
-
 namespace {
-
-constexpr const char* kChoices[] = {"Fixed", "Scale with window"};
-
-constexpr NdsTitleSetting kTextBoxSize = {
-    "text_box_size",
-    "Text box size",
-    "Fixed keeps the text boxes the size they have in the 2x window, so a "
-    "big window shows more of the scene around them (needs a 3D resolution "
-    "above 1x). Scale with window stretches them with the screen, filling "
-    "its lower half as on the DS.",
-    0, 1, 1,
-    kChoices, sizeof(kChoices) / sizeof(kChoices[0]), nullptr,
-    0,
-};
-
-const int kTextBoxSizeId = nds_title_setting_register(&kTextBoxSize);
-
-// The main screen height (window points) at which the box keeps its own
-// size: the default 2x window.
-constexpr int kReferencePoints = 192 * 2;
 
 constexpr int32_t kOne = 0x1000;  // fx32 1.0
 
@@ -74,50 +96,27 @@ constexpr uint32_t kMtxPop = 0x04000448;
 constexpr uint32_t kMtxScale = 0x0400046C;
 constexpr uint32_t kMtxTrans = 0x04000470;
 
-// The message manager (0x020421B0): its window frame object is at +0x19E0,
-// and the frame's rectangle (s16 x, y, width, height) is pointed to by
-// frame+0x440.
-constexpr uint32_t kWindowRect = 0x19E0 + 0x440;
-
-bool InMainRam(uint32_t addr) {
-    return addr >= 0x02000000u && addr < 0x02400000u;
-}
-
-// The scale, fx32 (kOne = unchanged).
+// The 3D window's scale, fx32 (kOne = unchanged).
 int32_t TextBoxScale() {
-    if (nds_title_setting_value(kTextBoxSizeId) != 0) return kOne;
-    const int points = nds_title_display_height();
     const int raster = nds_gpu3d_internal_scale();
-    if (points <= kReferencePoints || raster <= 1) return kOne;
-    int32_t k = static_cast<int32_t>(
-        (static_cast<int64_t>(kReferencePoints) * kOne + points / 2) / points);
+    if (raster <= 1) return kOne;
+    int32_t k = static_cast<int32_t>(UiScale() * kOne + 0.5);
     const int32_t sharp = (kOne + raster - 1) / raster;
     if (k < sharp) k = sharp;
     return k < kOne ? k : kOne;
 }
 
-// DS y of the anchor: the bottom edge, or the top edge for a window whose
-// centre is in the top half of the screen.
-int32_t AnchorY(uint32_t manager) {
-    const uint32_t rect = bus_read_u32(manager + kWindowRect);
-    if (!InMainRam(rect)) return 192;
-    const int y = static_cast<int16_t>(bus_read_u16(rect + 2));
-    const int height = static_cast<int16_t>(bus_read_u16(rect + 6));
-    return y + height / 2 < 96 ? 0 : 192;
-}
-
 }  // namespace
 
 // Before each `bl 0x02066D00` in 0x020444F0 (r4 = message manager): push the
-// position matrix and scale the window about its anchor.
-NDS_TITLE_HOOK void Dq9TextBoxBegin(uint32_t* r4) {
+// position matrix and scale the window about the centre.
+NDS_TITLE_HOOK void Dq9TextBoxBegin(uint32_t*) {
     bus_write_u32(kMtxPush, 0);
     const int32_t k = TextBoxScale();
     if (k >= kOne) return;
     // p' = a + k (p - a): translate by a (1 - k), then scale by k.
-    const int32_t ax = 128, ay = AnchorY(*r4);
-    bus_write_u32(kMtxTrans, static_cast<uint32_t>(ax * (kOne - k)));
-    bus_write_u32(kMtxTrans, static_cast<uint32_t>(ay * (kOne - k)));
+    bus_write_u32(kMtxTrans, static_cast<uint32_t>(kAnchorX * (kOne - k)));
+    bus_write_u32(kMtxTrans, static_cast<uint32_t>(kAnchorY * (kOne - k)));
     bus_write_u32(kMtxTrans, 0);
     bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
     bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
@@ -127,4 +126,37 @@ NDS_TITLE_HOOK void Dq9TextBoxBegin(uint32_t* r4) {
 // Before each `pop {r4, pc}` that follows a Dq9TextBoxBegin.
 NDS_TITLE_HOOK void Dq9TextBoxEnd() {
     bus_write_u32(kMtxPop, 1);
+}
+
+// ---- 2D windows ------------------------------------------------------------
+// The other windows are text BGs on the main engine, and the presenter
+// scales those itself (nds_gpu2d_set_fixed_size_layers): the BGs are shown
+// at k of the game rect about the centre, their native pixels magnified n
+// times instead of filling the screen. That needs no 3D resolution above 1x.
+//   * The message manager's 2D mode (byte mgr+0x19CC, chosen per message by
+//     the open calls 0x02044F4C / 0x0204501C): 0x020439C0 renders the box
+//     into BG2 (translucent background, blended 10/6 over the 3D) and BG3
+//     (text) at the fixed rect (2, 116, 252, 74), and turns BG2 and BG3 on.
+//     NPC talk and the post-battle results use it.
+//   * The camp menu: window backgrounds on BG1 (blended over the 3D), frames
+//     and text on BG2.
+// In the field and in battle BG1 is on but empty, so the mask is simply
+// BG1..BG3; the BGs that are off are left alone.
+//
+// Set once per 3D frame, at G3_SwapBuffers; the presenter latches it when
+// it composes the frame. Presentation only: nothing reaches the guest.
+namespace {
+
+constexpr uint8_t kWindowBgs = 0x0E;  // BG1..BG3
+
+}  // namespace
+
+// G3_SwapBuffers entry, once per 3D frame.
+NDS_TITLE_HOOK void Dq9WindowLayers() {
+    const double scale = UiScale();
+    if (scale >= 1.0)
+        nds_gpu2d_set_fixed_size_layers(0, 1.0f, 0, 0);
+    else
+        nds_gpu2d_set_fixed_size_layers(kWindowBgs, static_cast<float>(scale),
+                                        kAnchorX, kAnchorY);
 }

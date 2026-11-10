@@ -104,18 +104,19 @@ Shipped hooks:
   standard strings) on the next frame. A menu that is already open
   switches when it is reopened. System (the default) leaves the game
   untouched, on `[system] language` from `game.toml`.
-- **Text box size** (`text_box_size.cpp`; `dq9_arm9.toml`): the runtime
-  menu's Game > Text box size (`[title] text_box_size`): Fixed (the default)
-  or Scale with window. DQ9 draws its message window with the 3D engine, so
-  above 1x it used to grow with the window and fill the lower half of the
-  screen. Fixed scales the window's geometry where the game draws it
-  (0x020444F0) so it keeps the size it has in the 2x window (384 points
-  tall), about the screen's bottom centre, like Auto camera distance does
-  for the characters. It applies only while the 3D renders above 1x, and
-  never shrinks a glyph below one raster pixel per texel, so with a low 3D
-  resolution in a big window the box stays somewhat larger. Windows drawn
-  on the 2D layers (title menu, camp menu, battle results) still scale with
-  the window.
+- **UI size** (`text_box_size.cpp`; `dq9_arm9.toml`): the runtime menu's
+  Game > UI size (`[title] ui_size`): Scale with window, 1x, 2x (the
+  default), 3x or 4x. Above Scale with window, the text boxes and menus keep
+  the size they have on a screen that many times the DS screen (2x: a
+  384-point-tall window) however big the window is, scaled about the
+  screen centre, so a big window shows more of the scene around them. DQ9
+  draws some message windows with the 3D engine: those are scaled where the
+  game draws them (0x020444F0), only while the 3D renders above 1x, and
+  never with a glyph below one raster pixel per texel. The other windows
+  (NPC talk, battle results, camp menu) are on the 2D text BGs 1..3: the
+  runner's presenter draws those layers into a smaller rect of the window
+  (`nds_gpu2d_set_fixed_size_layers`), at any 3D resolution. The runner's
+  OpenGL presenter and an open runtime menu show them unscaled.
 - **Local wireless diagnostics** (`local_wireless_diag.cpp`;
   `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
   ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and
