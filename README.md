@@ -191,5 +191,5 @@ The lobby server itself still sees your address and, in its current
 version, lists the host's address to everyone browsing for lobbies.
 
 Recall can be measured offline with
-`tools/static_scan_dq9.py --out <dir>` (seeds stripped) followed by
+`tools/static_scan_dq9.py --out <dir>` followed by
 `tools/score_static_scan.py` on `<dir>/<image>/gen/scan_<image>_dispatch.c`.

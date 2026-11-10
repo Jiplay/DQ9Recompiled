@@ -20,14 +20,14 @@ each exchanges targets only within its own group.
 
 Usage:
   static_scan_dq9.py --recompiler build/ndsrecomp-recompiler/nds_recompile \\
-      --inputs generated/inputs --out <dir> [--passes 4] [--keep-seeds]
+      --inputs generated/inputs --out <dir> [--passes 4]
 
 Output per image: <out>/<image>/{<image>.toml, gen/<bank>_dispatch.c,
 finder.log, external.txt}. Use tools/score_static_scan.py on the dispatch
-files (run without --keep-seeds to measure recall from the ROM entry alone).
+files.
 
 Bank inputs (consumed by CMake through tools/gen_bank.py):
-  <out>/<image>.toml             finder config (seeds kept with --keep-seeds)
+  <out>/<image>.toml             finder config
   <out>/<image>.candidates.txt   converged cross-image call targets
   <out>/manifest.json            per-image bin/config/candidates/function count
 These are rewritten only when their content changes, so an unchanged scan
@@ -46,12 +46,6 @@ import sys
 from pathlib import Path
 
 DS_MAIN_RAM_LIMIT = 0x02400000
-
-
-def strip_seeds(toml_text: str) -> str:
-    """Keep [program]/[identity]/... and only the first (ROM header) entry."""
-    parts = toml_text.split("[[entry_point]]")
-    return parts[0] + ("[[entry_point]]" + parts[1] if len(parts) > 1 else "")
 
 
 def overlay_config(toml_text: str, data: bytes, base: int) -> str:
@@ -147,9 +141,6 @@ def main() -> int:
     ap.add_argument("--inputs", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--passes", type=int, default=4)
-    ap.add_argument("--keep-seeds", action="store_true",
-                    help="keep the main images' coverage seeds (bank build); "
-                         "default strips them to measure static recall")
     args = ap.parse_args()
     inp = args.inputs.resolve()
     out = args.out.resolve()
@@ -161,7 +152,7 @@ def main() -> int:
         d.mkdir(exist_ok=True)
         cfg = d / f"{cpu}.toml"
         text = (inp / f"{cpu}.toml").read_text()
-        cfg.write_text(text if args.keep_seeds else strip_seeds(text))
+        cfg.write_text(text)
         images.append((cpu, cfg, inp / f"{cpu}.bin", cpu, "game"))
     for ov in json.loads((inp / "overlays.json").read_text()):
         base = int(ov["load_address"], 16)
@@ -232,7 +223,7 @@ def main() -> int:
             "candidates_sha1": hashlib.sha1(cand_text[name].encode()).hexdigest(),
         })
     write_if_changed(out / "manifest.json", json.dumps(
-        {"keep_seeds": args.keep_seeds, "converged": converged,
+        {"converged": converged,
          "images": manifest}, indent=1) + "\n")
     return 0
 
