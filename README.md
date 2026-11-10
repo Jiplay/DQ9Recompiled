@@ -56,7 +56,7 @@ Then build the runner against the bank directory:
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
         -DNDS_RETAIL_BIOS_BANKS=OFF \
-        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp;$PWD/src/hooks/camera_zoom.cpp;$PWD/src/hooks/camera_rotation.cpp;$PWD/src/hooks/language.cpp"
+        "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp;$PWD/src/hooks/camera_zoom.cpp;$PWD/src/hooks/camera_rotation.cpp;$PWD/src/hooks/language.cpp;$PWD/src/hooks/text_box_size.cpp"
     cmake --build build-runner -j6 --target nds_runner
 
 The bank compile is large (about 1 GB of C); keep `-j` at 6 or below on a
@@ -104,6 +104,18 @@ Shipped hooks:
   standard strings) on the next frame. A menu that is already open
   switches when it is reopened. System (the default) leaves the game
   untouched, on `[system] language` from `game.toml`.
+- **Text box size** (`text_box_size.cpp`; `dq9_arm9.toml`): the runtime
+  menu's Game > Text box size (`[title] text_box_size`): Fixed (the default)
+  or Scale with window. DQ9 draws its message window with the 3D engine, so
+  above 1x it used to grow with the window and fill the lower half of the
+  screen. Fixed scales the window's geometry where the game draws it
+  (0x020444F0) so it keeps the size it has in the 2x window (384 points
+  tall), about the screen's bottom centre, like Auto camera distance does
+  for the characters. It applies only while the 3D renders above 1x, and
+  never shrinks a glyph below one raster pixel per texel, so with a low 3D
+  resolution in a big window the box stays somewhat larger. Windows drawn
+  on the 2D layers (title menu, camp menu, battle results) still scale with
+  the window.
 - **Local wireless diagnostics** (`local_wireless_diag.cpp`;
   `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
   ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and

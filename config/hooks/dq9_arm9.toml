@@ -138,3 +138,42 @@ name = "Dq9LanguageReload"
 registers = ["lr"]
 on_true = "jump"
 jump_address = 0x020E5124 # reload the articles and standard strings
+
+# Text box size (the Game > Text box size setting).
+# Handler: src/hooks/text_box_size.cpp.
+#
+# The field draw (ov17 0x021960B8) sets a pixel-space orthographic
+# projection (G3_OrthoW at 0x0219617C: 0..256 x 0..192, near -1024) and
+# then calls 0x020444F0 (r0 = message manager from 0x020421B0); ov000
+# (battle) and ov019 call it too. It draws the message window through
+# 0x02066D00(manager, 0): the frame (0x0202F414 ->
+# 0x0202F46C: background quad and border cells), the glyphs (0x020417C0),
+# the inline choice list (0x02044540 -> 0x0205C97C) and the prompt. Each
+# piece pushes the position matrix, translates to its pixel position at
+# z = 1024 (the near plane) and pops, so the hooks wrap both calls in a
+# push, a scale about the window's anchor and a pop.
+# With a render target at manager+0x38 (the 0x02044514 path) the window is
+# drawn, then the target's own draws 0x020E2404 / 0x020E2488 run; the pop
+# comes after those. The title menu, camp menu and battle results are 2D
+# layers and do not come through here.
+[[hook]]
+address = 0x02044514      # mov r0, r4 (before bl 0x02066D00, target path)
+mode = "arm"
+name = "Dq9TextBoxBegin"
+registers = ["r4"]
+
+[[hook]]
+address = 0x02044530      # pop {r4, pc}
+mode = "arm"
+name = "Dq9TextBoxEnd"
+
+[[hook]]
+address = 0x02044534      # mov r1, #0 (before bl 0x02066D00)
+mode = "arm"
+name = "Dq9TextBoxBegin"
+registers = ["r4"]
+
+[[hook]]
+address = 0x0204453C      # pop {r4, pc}
+mode = "arm"
+name = "Dq9TextBoxEnd"
