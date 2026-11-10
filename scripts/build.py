@@ -16,6 +16,15 @@ ROM_SHA1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 PROJECT_NAME = "DQ9Recomp"
 BANK_BUILD_DIR = "build"
 RUNNER_BUILD_DIR = "build-runner"
+RECOMP_UI_DIR = "recomp-ui"
+
+# The runner always links the recompiled FreeBIOS banks, which are not part of
+# DQ9_BANKS: ndsrecomp ships their configs and images, and nds_recompile (built
+# with the banks above) turns them into ndsrecomp/generated/*.c.
+FREEBIOS_BANKS = (
+    ("freebios9", "drastic_bios_arm9.bin", "freebios_arm9"),
+    ("freebios7", "drastic_bios_arm7.bin", "freebios_arm7"),
+)
 
 IS_WINDOWS = platform.system() == "Windows"
 EXE_SUFFIX = ".exe" if IS_WINDOWS else ""
@@ -110,6 +119,23 @@ def build_banks(args, compilers, python):
          "--target", "dq9_romcheck", "dq9_generate_banks"])
 
 
+def ensure_freebios_banks():
+    """Recompile the FreeBIOS images the runner links, if they are missing."""
+    recompiler = os.path.join(BANK_BUILD_DIR, "ndsrecomp-recompiler",
+                              f"nds_recompile{EXE_SUFFIX}")
+    out = os.path.join("ndsrecomp", "generated")
+    for config, image, bank in FREEBIOS_BANKS:
+        if all(os.path.exists(os.path.join(out, f"{bank}{suffix}"))
+               for suffix in (".c", "_dispatch.c", ".h")):
+            continue
+        run([
+            recompiler,
+            "--config", os.path.join("ndsrecomp", "bios", f"{config}.toml"),
+            "--bin", os.path.join("ndsrecomp", "third_party", "freebios", image),
+            "--out", out, "--bank", bank,
+        ])
+
+
 def build_runner(args, compilers):
     configure = [
         "cmake", "-G", "Ninja", "-S", os.path.join("ndsrecomp", "runner"),
@@ -146,8 +172,10 @@ def build_runner(args, compilers):
     elif IS_WINDOWS:
         die("no SDL3 found: pass --sdl3-dir <dir with SDL3Config.cmake> or set SDL3_DIR")
 
-    if args.recomp_ui:
-        configure.append(f"-DNDS_RECOMP_UI_ROOT={cmake_path(args.recomp_ui)}")
+    # Point CMake at the submodule explicitly: its own fallback is a hardcoded
+    # path from the author's machine, and a cached value could also win.
+    recomp_ui = args.recomp_ui or RECOMP_UI_DIR
+    configure.append(f"-DNDS_RECOMP_UI_ROOT={cmake_path(recomp_ui)}")
 
     configure.append(f"-DNDS_ONLINE={'ON' if args.online else 'OFF'}")
     if args.recomp_net:
@@ -225,7 +253,8 @@ def parse_args():
                    help="Keep the interpreter in the runner as a fallback")
     p.add_argument("--sdl3-dir", help="Directory with SDL3Config.cmake (default: $SDL3_DIR, "
                                       "or ../EternalSonataReprise/sdk/cmake on Windows)")
-    p.add_argument("--recomp-ui", help="Path to the recomp-ui checkout (default: ../recomp-ui)")
+    p.add_argument("--recomp-ui", help="Path to a recomp-ui checkout to use instead "
+                                       f"of the {RECOMP_UI_DIR}/ submodule")
     p.add_argument("--online", action="store_true",
                    help="Build Netplay (online lobbies, NDS_ONLINE=ON); needs the "
                         "recomp-net checkout")
@@ -243,8 +272,12 @@ def main():
         do_package(args.package)
         return
 
-    if not os.path.exists(os.path.join("ndsrecomp", "runner", "CMakeLists.txt")):
-        die("ndsrecomp submodule missing: run `git submodule update --init`")
+    submodules = [
+        os.path.join("ndsrecomp", "runner", "CMakeLists.txt"),
+        os.path.join(RECOMP_UI_DIR, "src", "recomp_runtime_ui.h"),
+    ]
+    if not all(os.path.exists(path) for path in submodules):
+        die("submodules missing: run `git submodule update --init --recursive`")
 
     check_deps()
     compilers = find_clang()
@@ -254,6 +287,7 @@ def main():
             die("dq9.nds not found in the repo root: place your Europe (YDQP) ROM there")
         python = ensure_venv()
         build_banks(args, compilers, python)
+        ensure_freebios_banks()
     elif not os.path.isdir(os.path.join("generated", "recomp")):
         die("generated/recomp missing: run without --runner-only first")
 
