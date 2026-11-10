@@ -207,9 +207,16 @@ bool InGame() {
 // G3_SwapBuffers entry, once per 3D frame.
 NDS_TITLE_HOOK void Dq9WindowLayers() {
     const double scale = UiScale();
-    if (scale >= 1.0 || !InGame())
+    if (scale >= 1.0 || !InGame()) {
         nds_gpu2d_set_fixed_size_layers(0, 1.0f, 0, 0);
-    else
+        nds_title_set_unscaled_touch_rect(0, 0, 0, 0);
+    } else {
         nds_gpu2d_set_fixed_size_layers(kWindowBgs, static_cast<float>(scale),
                                         kAnchorX, kAnchorY);
+        // The touchscreen's Menu button (top right) is not part of the
+        // scaled layers: it stays where it is drawn, so a click there must
+        // not be mapped back through the scale. The corner is generous; the
+        // frontend only honours it where the scaled UI is not shown.
+        nds_title_set_unscaled_touch_rect(176, 0, 256, 40);
+    }
 }
