@@ -90,7 +90,8 @@ using dq9::LoadedOverlay;
 //
 // The push and pop are sent whatever the setting, so they always pair up
 // even when the setting or the window changes between the two hooks; the
-// pair alone leaves the image unchanged.
+// pair alone leaves the image unchanged. Nested pairs (a choice list drawn
+// by the message window) scale only once.
 //
 // These hooks write GX matrix commands (0x04000444 and on). That is what the
 // game itself does around each piece of the window, through the same FIFO;
@@ -128,13 +129,19 @@ void ScaleAboutCentre() {
     bus_write_u32(kMtxScale, static_cast<uint32_t>(kOne));
 }
 
+// How many wrapped draws are open. The message window's draw 0x02066D00
+// draws its own choice list through 0x0205C97C (0x02066EA0 ->
+// 0x02044540), which is wrapped too: only the outermost one scales, or the
+// list would shrink twice.
+int g_wrap_depth = 0;
+
 }  // namespace
 
 // Before each `bl 0x02066D00` in 0x020444F0 (r4 = message manager): push the
 // position matrix and scale the window about the centre.
 NDS_TITLE_HOOK void Dq9TextBoxBegin(uint32_t*) {
     bus_write_u32(kMtxPush, 0);
-    ScaleAboutCentre();
+    if (g_wrap_depth++ == 0) ScaleAboutCentre();
 }
 
 // The interaction prompt: the icon shown when the player can talk to an NPC
@@ -150,10 +157,26 @@ NDS_TITLE_HOOK void Dq9InteractPrompt() {
     ScaleAboutCentre();
 }
 
+namespace {
+// A choice window was drawn (0x0205C97C) since the last G3_SwapBuffers.
+bool g_choice_drawn = false;
+}  // namespace
+
+// After the prologue of the choice window draw 0x0205C97C(list, ...): the
+// same push and scale as Dq9TextBoxBegin. When the list is shown (list+0x233
+// and +0x232, the draw's own test), its cursor, an OBJ, is drawn this frame
+// too: Dq9WindowLayers then scales the OBJs with the window.
+NDS_TITLE_HOOK void Dq9ChoiceWindowBegin(uint32_t* list) {
+    Dq9TextBoxBegin(nullptr);
+    if (bus_read_u8(*list + 0x233) != 0 && bus_read_u8(*list + 0x232) != 0)
+        g_choice_drawn = true;
+}
+
 // Before each `pop {r4, pc}` that follows a Dq9TextBoxBegin, and at the
 // exit of the choice window draw 0x0205C97C (also wrapped).
 NDS_TITLE_HOOK void Dq9TextBoxEnd() {
     bus_write_u32(kMtxPop, 1);
+    if (g_wrap_depth > 0) --g_wrap_depth;
 }
 
 // The field's stylus arrow (0x02096C48, see config/hooks/dq9_arm9.toml):
@@ -227,6 +250,8 @@ namespace {
 // BG1..BG3, and the OBJs: the menu cursors are OBJs drawn over the windows
 // (the presenter takes OBJs only on frames that split a BG).
 constexpr uint8_t kWindowBgs = 0x1E;
+// The OBJs alone.
+constexpr uint8_t kWindowObjs = 0x10;
 
 // Only in the game proper (field, battle, camp menu). The boot sequence and
 // the title menu draw their art on the same BGs and are left as on the DS.
@@ -265,10 +290,24 @@ bool Window2dShown() {
 
 // G3_SwapBuffers entry, once per 3D frame.
 NDS_TITLE_HOOK void Dq9WindowLayers() {
+    const bool choice = g_choice_drawn;
+    g_choice_drawn = false;
     const double scale = UiScale();
+    const int32_t choice_scale = TextBoxScale();
     if (scale >= 1.0 || !InGame()) {
         nds_gpu2d_set_fixed_size_layers(0, 1.0f, 0, 0);
         nds_title_set_unscaled_touch_rect(0, 0, 0, 0);
+        nds_title_set_touch_unscaled(false);
+    } else if (choice && !Window2dShown() && choice_scale < kOne) {
+        // A 3D choice window with no 2D window up (Yes/No in the field's
+        // message window): its cursor is an OBJ and no BG is split, so the
+        // OBJs are split alone, at the 3D window's own scale (it can stop
+        // shrinking before the 2D layers do). The touchscreen maps the
+        // mouse back through the same scale, onto the list's entries.
+        nds_gpu2d_set_fixed_size_layers(
+            kWindowObjs, static_cast<float>(choice_scale) / kOne, kAnchorX,
+            kAnchorY);
+        nds_title_set_unscaled_touch_rect(176, 0, 256, 40);
         nds_title_set_touch_unscaled(false);
     } else {
         nds_gpu2d_set_fixed_size_layers(kWindowBgs, static_cast<float>(scale),

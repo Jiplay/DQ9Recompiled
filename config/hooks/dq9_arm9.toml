@@ -183,13 +183,16 @@ name = "Dq9TextBoxEnd"
 # text (0x02045F4C -> 0x020417C0, immediate 3D like the message window) and
 # places the cursor (an OBJ, scaled with the 2D layers). Callers: ov13
 # 0x02184A88 (Yes/No on leaving skill point allocation), ov17 0x021AFA94,
-# ov20 0x0218C974. The same pair as above, after the prologue and at its
-# only exit.
+# ov20 0x0218C974, and the message window's own choice list (0x02044540,
+# list = manager+0x90). The same pair as above, after the prologue and at
+# its only exit; the first also notes a shown list (+0x233, +0x232) so that
+# Dq9WindowLayers scales its cursor and maps the mouse onto it when no 2D
+# window is up.
 [[hook]]
-address = 0x0205C984      # mov r10, r0 (after push / sub sp)
+address = 0x0205C984      # mov r10, r0 (after push / sub sp; r0 = list)
 mode = "arm"
-name = "Dq9TextBoxBegin"
-registers = ["r4"]
+name = "Dq9ChoiceWindowBegin"
+registers = ["r0"]
 
 [[hook]]
 address = 0x0205CB5C      # add sp, sp, #0x28 (single exit)
