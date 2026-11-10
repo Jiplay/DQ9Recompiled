@@ -257,3 +257,74 @@ NDS_TITLE_HOOK void Dq9MouseMenuTapChoose(uint32_t* flags) {
         *flags |= 4u;
     g_tap_mode = 0;
 }
+
+// Character creation: see config/hooks/dq9_arm9_ov009.toml.
+//
+// Off for now: the hover applies the entry under the mouse at once (gender,
+// looks), as the keypad cursor does, which may feel too eager, so the screen
+// stays vanilla. Set kCharHover to true to bring it back.
+
+namespace {
+constexpr bool kCharHover = false;
+bool g_char_hover = false;
+constexpr uint32_t kCharPage = 0xC58u;  // u8, page of the menu
+}  // namespace
+
+// Before `cmp r1, #0` at 0x02188F24: r1 is the press edge, r4 the menu, and
+// the pen position is already at sp+4 / sp+0. A moved mouse with no button
+// held takes the press path on the mouse position.
+NDS_TITLE_HOOK void Dq9MouseMenuCharPress(uint32_t* press, uint32_t* cc,
+                                          uint32_t* sp) {
+    g_char_hover = false;
+    if (!kCharHover || !Enabled() || *press != 0u) return;
+    if (bus_read_u8(*cc + kCharPage) == 8u) return;
+    int x = 0, y = 0;
+    if (!HoverMoved(*cc, &x, &y)) return;
+    bus_write_u32(*sp + 4u, static_cast<uint32_t>(x));
+    bus_write_u32(*sp + 0u, static_cast<uint32_t>(y));
+    g_char_hover = true;
+    *press = 1u;
+}
+
+// Before `add r0, r6, #3` at 0x02188F44: r6 is what the pen hit. The hover
+// keeps entries (0..100) and drops the tabs and the buttons.
+NDS_TITLE_HOOK void Dq9MouseMenuCharHit(uint32_t* hit) {
+    if (!g_char_hover) return;
+    g_char_hover = false;
+    const int32_t h = static_cast<int32_t>(*hit);
+    if (h < 0 || h > 100) *hit = static_cast<uint32_t>(-1);
+}
+
+// Name keyboard: see "part 7" in config/hooks/dq9_arm9_ov003.toml.
+
+namespace {
+bool g_key_hover = false;
+int g_key_hover_x = 0, g_key_hover_y = 0;
+}  // namespace
+
+// Before `cmp r1, #0` at 0x0215F350: r1 is the press edge, r10 the keyboard.
+// A moved mouse with no button held enters the key search too.
+NDS_TITLE_HOOK void Dq9MouseMenuKeyPress(uint32_t* press, uint32_t* kb) {
+    g_key_hover = false;
+    if (!Enabled() || *press != 0u) return;
+    if (!HoverMoved(*kb, &g_key_hover_x, &g_key_hover_y)) return;
+    g_key_hover = true;
+    *press = 1u;
+}
+
+// At 0x0215F364, after the pen position is read: x at sp+8, y at sp+0xC.
+NDS_TITLE_HOOK void Dq9MouseMenuKeyPosition(uint32_t* sp) {
+    if (!g_key_hover) return;
+    bus_write_u32(*sp + 8u, static_cast<uint32_t>(g_key_hover_x));
+    bus_write_u32(*sp + 12u, static_cast<uint32_t>(g_key_hover_y));
+}
+
+// Before `cmp r7, #0` at 0x0215F3F0: r7 is the key found (0 for none). On
+// the hover it becomes the cursor (*kb) and r7 is cleared, so nothing is
+// typed.
+NDS_TITLE_HOOK void Dq9MouseMenuKeyFound(uint32_t* key, uint32_t* kb) {
+    if (!g_key_hover) return;
+    g_key_hover = false;
+    if (*key != 0u) bus_write_u32(*kb, *key);
+    *key = 0u;
+}

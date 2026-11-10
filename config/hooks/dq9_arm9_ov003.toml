@@ -65,3 +65,31 @@ address = 0x021608DC      # cmp r1, #0 (r1 = press edge; Patty's party planner)
 mode = "arm"
 name = "Dq9MouseMenuTapPress"
 registers = ["r1", "sp"]
+
+# Part 7: the name keyboard (character creation's name page, and wherever
+# else a name is typed). ov3 0x0215F000(kb) steps it: *kb is the key under
+# the cursor (the keypad moves it through 0x0215E9EC). On a press edge
+# (touch manager +0x55, at 0x0215F34C) it reads the pen (0x02012A94 into
+# sp+8 / sp+0xC), looks for the key under it, makes it the cursor and types
+# it (0x0215EF54). So the cursor only moved on a click.
+#
+# With the setting on, while no button is held the same search runs on the
+# mouse position when it has moved, and the key found only becomes the
+# cursor; nothing is typed.
+[[hook]]
+address = 0x0215F350      # cmp r1, #0 (r1 = press edge, r10 = kb)
+mode = "arm"
+name = "Dq9MouseMenuKeyPress"
+registers = ["r1", "r10"]
+
+[[hook]]
+address = 0x0215F364      # ldr r0, [r10, #4] (after bl 0x02012A94: x sp+8, y sp+0xC)
+mode = "arm"
+name = "Dq9MouseMenuKeyPosition"
+registers = ["sp"]
+
+[[hook]]
+address = 0x0215F3F0      # cmp r7, #0 (r7 = key under the pen, or 0)
+mode = "arm"
+name = "Dq9MouseMenuKeyFound"
+registers = ["r7", "r10"]

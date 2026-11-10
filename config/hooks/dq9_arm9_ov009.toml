@@ -1,0 +1,32 @@
+# Mouse-friendly menus, part 6: character creation (new game: gender and the
+# looks). Handler: src/hooks/mouse_menus.cpp.
+#
+# ov9 0x02188EE8(cc) steps the menu. It reads the pen (0x02012A94 into sp+4 /
+# sp+0) and, on a press edge (touch manager +0x55), hit-tests it
+# (0x02189854): an entry (>= 0) moves the cursor (list at cc+0xBEC) and is
+# applied at once (cc+0xC58 is the page; page 1 = gender, its choice at
+# cc+0xDA3), 101..108 are the page tabs and -2 / -3 the OK and back
+# buttons. The keypad moves the cursor and applies it the same way. So a
+# click already picks an entry, but nothing followed the mouse.
+#
+# Off for now (kCharHover in the handler): the screen stays vanilla.
+# With it on, while no button is held the press path runs on the
+# mouse position when it has moved, keeping only entries (tabs and buttons
+# need a click), except on page 8, where a press can confirm.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov009"
+sha1 = "d3b2e7ad50433a559258673fe9a48c643a61a9ad"
+
+[[hook]]
+address = 0x02188F24      # cmp r1, #0 (r1 = press edge, r4 = cc)
+mode = "arm"
+name = "Dq9MouseMenuCharPress"
+registers = ["r1", "r4", "sp"]
+
+[[hook]]
+address = 0x02188F44      # add r0, r6, #3 (r6 = what the pen hit)
+mode = "arm"
+name = "Dq9MouseMenuCharHit"
+registers = ["r6"]
