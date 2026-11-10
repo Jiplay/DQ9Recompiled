@@ -62,10 +62,11 @@ constexpr int kAutoMaxPermille = 4000;
 // Headless (no window) Auto stays at 1000.
 //
 // Full-screen pages (dq9::FullScreenPage: the battle records, the Defeated
-// Monster List) stay at 1000 too. They are shown stretched as on the DS,
-// and their camera frames one model (Stella, the monster) beside the 2D
-// layout: moving it back shrinks the model toward the screen centre, away
-// from the place the page keeps for it.
+// Monster List, the equipment screen, character creation) stay at 1000
+// too. They are shown stretched as on the DS, and their camera frames one
+// model (Stella, the monster, the character) beside the 2D layout: moving
+// it back shrinks the model toward the screen centre, away from the place
+// the page keeps for it.
 int CameraDistancePermille() {
     if (dq9::FullScreenPage()) return 1000;
     const int value = nds_title_setting_value(kCameraDistanceId);
