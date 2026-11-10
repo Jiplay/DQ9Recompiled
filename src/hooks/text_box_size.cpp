@@ -149,12 +149,43 @@ namespace {
 
 constexpr uint8_t kWindowBgs = 0x0E;  // BG1..BG3
 
+// Only in the game proper (field, battle, camp menu). The boot sequence and
+// the title menu draw their art on the same BGs and are left as on the DS.
+// The main loop (0x02000C9C) switches on the mode byte at ctx+4 (ctx =
+// 0x020F33D8, read by 0x0200FBAC): modes 0, 4, 5 and 9 run the game
+// (0x020D6CC4 with overlay 17); the boot and title screens run in mode 6.
+// Overlay 17 itself is already loaded on the title, so it cannot tell them
+// apart.
+//
+// Continue sets mode 0 at once, but the title's fade-out still runs from
+// overlay 4 after that, so the game also needs overlay 4 gone from its slot.
+// The overlay loader (0x020A1950) keeps the id loaded in each slot as a
+// signed byte at 0x01FFD364 + 6 * *(u32*)0x01FFD348 + slot (the slot of
+// overlay n is the word at 0x020E8F30 + 8n): overlays 0..6 share slot 0,
+// and the field loads another one there (battle: overlay 0).
+constexpr uint32_t kMainMode = 0x020F33D8 + 4;
+constexpr uint32_t kOverlayBank = 0x01FFD348;
+constexpr uint32_t kOverlaySlots = 0x01FFD364;
+constexpr uint32_t kTitleSlot = 0;
+constexpr int8_t kTitleOverlay = 4;
+
+bool InGame() {
+    switch (bus_read_u8(kMainMode)) {
+        case 0: case 4: case 5: case 9: break;
+        default: return false;
+    }
+    const uint32_t bank = bus_read_u32(kOverlayBank);
+    const auto slot0 = static_cast<int8_t>(
+        bus_read_u8(kOverlaySlots + 6 * bank + kTitleSlot));
+    return slot0 != kTitleOverlay;
+}
+
 }  // namespace
 
 // G3_SwapBuffers entry, once per 3D frame.
 NDS_TITLE_HOOK void Dq9WindowLayers() {
     const double scale = UiScale();
-    if (scale >= 1.0)
+    if (scale >= 1.0 || !InGame())
         nds_gpu2d_set_fixed_size_layers(0, 1.0f, 0, 0);
     else
         nds_gpu2d_set_fixed_size_layers(kWindowBgs, static_cast<float>(scale),
