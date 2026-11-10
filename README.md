@@ -82,9 +82,10 @@ hooks read them with `dq9::Tr()` (`src/hooks/lang.h`), and
 Shipped hooks:
 
 - **Skip intros** (`skip_intros.cpp`; `dq9_arm9_ov020.toml`, `dq9_arm9.toml`):
-  boots past the Nintendo / Mobiclip / Square Enix / Level-5 logos and the
-  opening movie by steering two of the game's own branches onto the paths it
-  takes after a soft reset. The game proper starts about 0.9e9 guest cycles
+  the runtime menu's Game > Skip intros (`[title] skip_intros`, On by
+  default) boots past the Nintendo / Mobiclip / Square Enix / Level-5 logos
+  and the opening movie by steering two of the game's own branches onto the
+  paths it takes after a soft reset. Off leaves the game untouched. The game proper starts about 0.9e9 guest cycles
   sooner, plus the whole movie.
 - **Camera distance** (`camera_zoom.cpp`; `dq9_arm9.toml`): the runtime
   menu's Game > Camera distance, Auto or 50% to 400% (`[title]
