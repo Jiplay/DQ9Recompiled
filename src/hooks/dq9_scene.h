@@ -25,12 +25,26 @@ inline int LoadedOverlay(uint32_t slot) {
 // over BG1 (BLDCNT 0x0241, EVA 15 / EVB 16). Its Defeated Monster List
 // loads overlay 14 in the same slot and is laid out the same way (a 3D
 // monster over BG1, engine A on the top LCD).
+//
+// The overlay stays loaded after the camp menu closes (the field does not
+// reload slot 1), and so does BLDCNT, so the page also needs its BG1 on
+// screen: engine A's BG1CNT screen base is 30 on the records page
+// (0x1E02 / 0x1E03) and 31 on the monster list (0x1F00 / 0x1F01), and goes
+// back to 0 (0x0004) as soon as the page closes; the camp menu uses 28 and
+// 29. The blend is checked too: BLDCNT = 0x0241 (alpha, BG0 over BG1).
+// Reading these registers has no side effects.
 inline bool FullScreenPage() {
     constexpr uint32_t kMenuSlot = 1;
     constexpr int kRecordsOverlay = 8;
     constexpr int kMonsterListOverlay = 14;
+    constexpr uint32_t kBg1cntA = 0x0400000A;
+    constexpr uint32_t kBldcntA = 0x04000050;
+    constexpr uint16_t kPageBlend = 0x0241;
     const int menu = LoadedOverlay(kMenuSlot);
-    return menu == kRecordsOverlay || menu == kMonsterListOverlay;
+    if (menu != kRecordsOverlay && menu != kMonsterListOverlay) return false;
+    const int screen_base = (bus_read_u16(kBg1cntA) >> 8) & 0x1F;
+    return (screen_base == 30 || screen_base == 31) &&
+           bus_read_u16(kBldcntA) == kPageBlend;
 }
 
 }  // namespace dq9
