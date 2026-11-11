@@ -177,6 +177,11 @@ def build_runner(args, compilers):
     recomp_ui = args.recomp_ui or RECOMP_UI_DIR
     configure.append(f"-DNDS_RECOMP_UI_ROOT={cmake_path(recomp_ui)}")
 
+    # The cartridge banner icon becomes the Windows .exe icon.
+    rom = os.path.abspath("dq9.nds")
+    if os.path.exists(rom):
+        configure.append(f"-DNDS_EXE_ICON_ROM={cmake_path(rom)}")
+
     configure.append(f"-DNDS_ONLINE={'ON' if args.online else 'OFF'}")
     if args.recomp_net:
         configure.append(f"-DNDS_RECOMP_NET_ROOT={cmake_path(args.recomp_net)}")
