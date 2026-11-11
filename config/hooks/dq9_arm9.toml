@@ -437,6 +437,27 @@ on_true = "jump"
 jump_address = 0x02043C98
 on_false = "continue"
 
+# Part 4: the heap block lookup in ITCM, reached from free (0x01FF8ADC) and the
+# upload requests (0x01FF8B48) through 0x01FF8AE4/8C44/8CB0. It scans 128
+# entries of 6 bytes ({u16 offset, u16, u16 flags}) one guest instruction at a
+# time, and tops the ARM9 profile while a dialogue choice is shown:
+#   0x01FF88C4  ldr r0, =base (0x01FF8914) ; sub r2, r1, r0
+#               cmp r2, #0x5000 ; movcs r0, #0 ; bxcs lr
+#               ldr r0, =table (0x01FF8918) ; mov r3, #0 ; b 0x01FF8904
+#   0x01FF88E4  ldrh r1, [r0, #4] ; tst r1, #1 ; beq 0x01FF88FC
+#               ldrh r1, [r0] ; cmp r1, r2 ; bxeq lr
+#   0x01FF88FC  add r3, r3, #1 ; add r0, r0, #6
+#   0x01FF8904  cmp r3, #0x80 ; bcc 0x01FF88E4 ; mov r0, #0 ; bx lr
+# At 60 FPS the hook does the search natively (same r0-r3 and NZCV on exit)
+# and returns. Handler: src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x01FF88C4      # function entry (r1 = pointer, lr = return address)
+mode = "arm"
+name = "Dq9HeapBlockLookup"
+registers = ["r0", "r1", "r2", "r3", "cpsr"]
+on_true = "return"
+on_false = "continue"
+
 # Right click = the message box's "next" key, like B (0x403 = A/B/X in the
 # check at 0x020440DC, which sets r5 = 1). The hook runs after the second key
 # test, before `cmp r0, #0` at 0x02044168. Handler: Dq9TextAdvanceRightClick

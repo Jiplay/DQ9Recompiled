@@ -125,3 +125,64 @@ NDS_TITLE_HOOK bool Dq9TextWindowSkipUpload(uint32_t* r3) {
     g_skip_tile_upload = false;
     return skip;
 }
+
+namespace {
+
+// Literals of the ITCM lookup at 0x01FF88C4: the heap's base and its block
+// table (128 entries of 6 bytes: u16 offset, u16, u16 flags, bit 0 = live).
+constexpr uint32_t kHeapBaseLiteral = 0x01FF8914u;
+constexpr uint32_t kHeapTableLiteral = 0x01FF8918u;
+constexpr uint32_t kHeapSpan = 0x5000u;
+constexpr uint32_t kHeapEntries = 0x80u;
+constexpr uint32_t kHeapEntrySize = 6u;
+
+constexpr uint32_t kCpsrN = 1u << 31;
+constexpr uint32_t kCpsrZ = 1u << 30;
+constexpr uint32_t kCpsrC = 1u << 29;
+constexpr uint32_t kCpsrV = 1u << 28;
+
+// NZCV of `cmp a, b`.
+uint32_t CmpFlags(uint32_t a, uint32_t b) {
+    const uint32_t d = a - b;
+    uint32_t f = 0u;
+    if (d & 0x80000000u) f |= kCpsrN;
+    if (d == 0u) f |= kCpsrZ;
+    if (a >= b) f |= kCpsrC;
+    if (((a ^ b) & (a ^ d)) & 0x80000000u) f |= kCpsrV;
+    return f;
+}
+
+}  // namespace
+
+// At the entry of the ITCM lookup 0x01FF88C4 (r1 = a pointer into the heap):
+// returns r0 = the live block entry whose offset is r1 - base, or 0. At
+// 60 FPS it runs the search natively and returns true (the bank then does
+// `bx lr`), leaving r0-r3 and NZCV as the guest code would.
+NDS_TITLE_HOOK bool Dq9HeapBlockLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
+                                       uint32_t* r3, uint32_t* cpsr) {
+    if (!Fast()) return false;
+    const uint32_t nzcv_mask = kCpsrN | kCpsrZ | kCpsrC | kCpsrV;
+    const uint32_t off = *r1 - bus_read_u32(kHeapBaseLiteral);
+    *r2 = off;
+    if (off >= kHeapSpan) {
+        *r0 = 0u;
+        *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(off, kHeapSpan);
+        return true;
+    }
+    uint32_t entry = bus_read_u32(kHeapTableLiteral);
+    for (uint32_t i = 0u; i < kHeapEntries; ++i, entry += kHeapEntrySize) {
+        *r1 = bus_read_u16(entry + 4u);
+        if ((*r1 & 1u) == 0u) continue;
+        *r1 = bus_read_u16(entry);
+        if (*r1 == off) {
+            *r0 = entry;
+            *r3 = i;
+            *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(*r1, off);
+            return true;
+        }
+    }
+    *r0 = 0u;
+    *r3 = kHeapEntries;
+    *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(kHeapEntries, kHeapEntries);
+    return true;
+}
