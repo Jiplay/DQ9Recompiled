@@ -419,6 +419,29 @@ NDS_TITLE_HOOK bool Dq9MouseMenuEquipPicked(uint32_t* s) {
 // Before `bl 0x0215690C` at 0x021563E0: the hover skips the model hit-test.
 NDS_TITLE_HOOK bool Dq9MouseMenuEquipSkipModel() { return g_equip_hover; }
 
+// At 0x0215B3C8, after the category list's keypad step: when the mouse has
+// moved onto a row (x > 128, 24 px rows from y 0, as the press loop in
+// 0x0215B2BC), put the list widget's cursor there, as 0x0205BB14 does:
+// w+20 page = n / (w+8 * w+12), then the rest split by the column count
+// **(w+36) into **(w+40) row and **(w+44) column.
+NDS_TITLE_HOOK void Dq9MouseMenuEquipCategory(uint32_t* s) {
+    if (!Enabled()) return;
+    int x = 0, y = 0;
+    if (!HoverMoved(*s + 0x19F4u, &x, &y)) return;
+    if (x <= 128 || y <= 0) return;
+    const int n = y / 24;
+    if (n >= 8 || y == 24 * n) return;  // the press loop wants 24n < y
+    const uint32_t w = *s + 0x19F4u;
+    if (n >= static_cast<int>(bus_read_u32(w))) return;
+    const uint32_t per = bus_read_u32(w + 8u) * bus_read_u32(w + 12u);
+    const uint32_t cols = bus_read_u32(bus_read_u32(w + 36u));
+    if (per == 0u || cols == 0u) return;
+    const uint32_t rest = static_cast<uint32_t>(n) % per;
+    bus_write_u32(w + 20u, static_cast<uint32_t>(n) / per);
+    bus_write_u32(bus_read_u32(w + 40u), rest / cols);
+    bus_write_u32(bus_read_u32(w + 44u), rest % cols);
+}
+
 // The top screen (see HANDOFF_TOP_SCREEN.md and config/hooks/dq9_arm9_ov017.toml).
 //
 // A click on one of the party's names in the row at the bottom of the top

@@ -103,3 +103,15 @@ name = "Dq9MouseMenuEquipSkipModel"
 on_true = "jump"
 jump_address = 0x021563E4
 on_false = "continue"
+
+# The category list before a slot is chosen (state 0: weapon, shield, head...,
+# 8 rows of 24 px at x > 128; 0x0215B2BC). The keypad moves the list widget
+# at s+0x19F4 (0x0205BF68) and the page switches to the category under its
+# cursor (0x0205BB94) at once; A or a press chooses it. With the setting on,
+# when the mouse moves onto another row the hook puts the widget's cursor
+# there after the keypad step, so the page follows it as it does the keypad.
+[[hook]]
+address = 0x0215B3C8      # add r0, r8, #0x1F4 (after bl 0x0205BF68; r8 = s)
+mode = "arm"
+name = "Dq9MouseMenuEquipCategory"
+registers = ["r8"]
