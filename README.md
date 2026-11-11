@@ -238,19 +238,21 @@ Built by default (from the
 `--no-online` leaves it out), the runner can put players on different networks in
 radio range of each other through an online lobby. The in-game menu
 (Esc) has a Netplay section. With Netplay on, only the players of your
-lobby are in range, not the LAN. First choose "Sign in with Discord" and
-authorize in the browser that opens (the public lobby server needs it,
-once). The key it leaves in the data folder (`netplay_secret`, a password:
-don't share it) signs you in from then on. To host, open the Rapportal:
+lobby are in range, not the LAN. The lobby server is DQ9Recomp's own
+(`ws://dq9.birabittoh.duckdns.org:80`, `lobby_url` in `game.toml`) and
+needs no sign-in; a server that asks for one gets a "Sign in with
+Discord" entry in the menu. To host, open the Rapportal:
 a lobby opens on the server with a seat for every free party slot, named
 after the "Lobby name" setting ("<your name>'s lobby" when empty). To
-join, pick a lobby under Netplay > Lobbies, then walk to the inn in
-Stornway and join as usual. The menu saves Netplay and the lobby name in
-`settings.toml` (`[online]`). From the command line: `--netplay on`,
-`--netplay-sign-in on`, `--netplay-join first`. The game's traffic goes
-only through the server's relay, never straight to the other players.
-The lobby server itself still sees your address and, in its current
-version, lists the host's address to everyone browsing for lobbies.
+join, talk to the multiplayer NPC at the inn in Stornway and look for
+a host: the open lobbies show in the game's own list (at most 8, the
+game's limit). Netplay > Lobbies in the menu still works too. The menu
+saves Netplay and the lobby name in `settings.toml` (`[online]`). From
+the command line: `--netplay on`, `--netplay-lobby-url ws://...`,
+`--netplay-join first`. The game's traffic goes only through the
+server's relay, never straight to the other players. The lobby server
+itself still sees your address and, in its current version, lists the
+host's address to everyone browsing for lobbies.
 
 Recall can be measured offline with
 `tools/static_scan_dq9.py --out <dir>` followed by
