@@ -17,6 +17,7 @@ PROJECT_NAME = "DQ9Recomp"
 BANK_BUILD_DIR = "build"
 RUNNER_BUILD_DIR = "build-runner"
 RECOMP_UI_DIR = "recomp-ui"
+RECOMP_NET_DIR = "recomp-net"
 
 # The runner always links the recompiled FreeBIOS banks, which are not part of
 # DQ9_BANKS: ndsrecomp ships their configs and images, and nds_recompile (built
@@ -182,9 +183,12 @@ def build_runner(args, compilers):
     if os.path.exists(rom):
         configure.append(f"-DNDS_EXE_ICON_ROM={cmake_path(rom)}")
 
+    # Netplay is on unless --no-online; like recomp-ui, recomp-net comes from
+    # its submodule unless --recomp-net points elsewhere.
     configure.append(f"-DNDS_ONLINE={'ON' if args.online else 'OFF'}")
-    if args.recomp_net:
-        configure.append(f"-DNDS_RECOMP_NET_ROOT={cmake_path(args.recomp_net)}")
+    if args.online:
+        recomp_net = args.recomp_net or RECOMP_NET_DIR
+        configure.append(f"-DNDS_RECOMP_NET_ROOT={cmake_path(recomp_net)}")
 
     if IS_WINDOWS:
         configure += [
@@ -260,10 +264,11 @@ def parse_args():
                                       "or ../EternalSonataReprise/sdk/cmake on Windows)")
     p.add_argument("--recomp-ui", help="Path to a recomp-ui checkout to use instead "
                                        f"of the {RECOMP_UI_DIR}/ submodule")
-    p.add_argument("--online", action="store_true",
-                   help="Build Netplay (online lobbies, NDS_ONLINE=ON); needs the "
-                        "recomp-net checkout")
-    p.add_argument("--recomp-net", help="Path to the recomp-net checkout (default: ../recomp-net)")
+    p.add_argument("--online", action=argparse.BooleanOptionalAction, default=True,
+                   help="Build Netplay (online lobbies, NDS_ONLINE=ON; default); "
+                        "--no-online builds the local-wireless-only runner")
+    p.add_argument("--recomp-net", help="Path to a recomp-net checkout to use instead "
+                                        f"of the {RECOMP_NET_DIR}/ submodule")
     return p.parse_args()
 
 
@@ -281,6 +286,8 @@ def main():
         os.path.join("ndsrecomp", "runner", "CMakeLists.txt"),
         os.path.join(RECOMP_UI_DIR, "src", "recomp_runtime_ui.h"),
     ]
+    if args.online and not args.recomp_net:
+        submodules.append(os.path.join(RECOMP_NET_DIR, "include", "recomp_net", "auth.h"))
     if not all(os.path.exists(path) for path in submodules):
         die("submodules missing: run `git submodule update --init --recursive`")
 

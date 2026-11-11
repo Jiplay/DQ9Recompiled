@@ -36,9 +36,11 @@ generated code is committed.
 does everything below on Linux, macOS and Windows: it creates `.venv`,
 generates the banks, builds the runner (with clang and, on Windows, the
 extra flags it needs) and copies it to `DQ9Recomp[.exe]` in the repo root.
-`ndsrecomp` and `recomp-ui` are submodules, so initialize them first.
-`--help` lists the options (`--release`, `--jobs`, `--runner-only`, `--no-hooks`,
-`--interpreter`, `--sdl3-dir`, `--package NAME`...). The manual steps:
+`ndsrecomp`, `recomp-ui` and `recomp-net` are submodules, so initialize them
+first. The runner is built with Netplay (online lobbies, from `recomp-net`);
+`--no-online` leaves it out. `--help` lists the options (`--release`, `--jobs`,
+`--runner-only`, `--no-hooks`, `--interpreter`, `--sdl3-dir`, `--no-online`,
+`--package NAME`...). The manual steps:
 
     python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
     cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -57,7 +59,7 @@ Then build the runner against the bank directory:
         -DNDS_BOOTSTRAP_FIRMWARE=ON -DNDS_TITLE_BANK_DIR=$PWD/generated/recomp \
         -DNDS_TITLE_ROM_SHA1=ff761d349709f329c8ac4bd0023fdce21861e8a1 \
         -DNDS_TITLE_CONFIG=$PWD/game.toml -DNDS_INTERPRETER=OFF \
-        -DNDS_RECOMP_UI_ROOT=$PWD/recomp-ui \
+        -DNDS_RECOMP_UI_ROOT=$PWD/recomp-ui         -DNDS_ONLINE=ON -DNDS_RECOMP_NET_ROOT=$PWD/recomp-net \
         -DNDS_RETAIL_BIOS_BANKS=OFF \
         "-DNDS_TITLE_HOOK_SOURCES=$PWD/src/hooks/skip_intros.cpp;$PWD/src/hooks/local_wireless_diag.cpp;$PWD/src/hooks/netplay_host.cpp;$PWD/src/hooks/camera_zoom.cpp;$PWD/src/hooks/camera_rotation.cpp;$PWD/src/hooks/language.cpp;$PWD/src/hooks/text_box_size.cpp"
     python3 scripts/gen-lang.py
@@ -231,9 +233,9 @@ for each of the other PCs. Two copies on one PC: `--instance 0` and
 `--instance 1` (separate saves).
 
 #### Netplay (in progress)
-Built with `python3 scripts/build.py --online` (needs a
-[recomp-net](https://github.com/RetroPortingToolKit/recomp-net) checkout
-next to this repo), the runner can put players on different networks in
+Built by default (from the
+[recomp-net](https://github.com/RetroPortingToolKit/recomp-net) submodule;
+`--no-online` leaves it out), the runner can put players on different networks in
 radio range of each other through an online lobby. The in-game menu
 (Esc) has a Netplay section. With Netplay on, only the players of your
 lobby are in range, not the LAN. First choose "Sign in with Discord" and

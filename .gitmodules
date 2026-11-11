@@ -5,3 +5,6 @@
 [submodule "recomp-ui"]
 	path = recomp-ui
 	url = https://github.com/RetroPortingToolKit/recomp-ui.git
+[submodule "recomp-net"]
+	path = recomp-net
+	url = https://github.com/RetroPortingToolKit/recomp-net.git
