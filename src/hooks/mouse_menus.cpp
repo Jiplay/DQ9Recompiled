@@ -9,6 +9,9 @@
 // (camp menu, priest...; "part 2" in config/hooks/dq9_arm9.toml, and their
 // green look, part 3, in the overlay manifests) and the simple choice lists
 // (Yes/No; "part 4" in config/hooks/dq9_arm9.toml).
+#include <cstdio>
+
+#include "dq9_scene.h"
 #include "title_hooks.h"
 #include "title_settings.h"
 
@@ -327,4 +330,86 @@ NDS_TITLE_HOOK void Dq9MouseMenuKeyFound(uint32_t* key, uint32_t* kb) {
     g_key_hover = false;
     if (*key != 0u) bus_write_u32(*kb, *key);
     *key = 0u;
+}
+
+// The top screen (see HANDOFF_TOP_SCREEN.md and config/hooks/dq9_arm9_ov017.toml).
+//
+// A click on one of the party's names in the row at the bottom of the top
+// screen (the overworld) opens that member's equipment page, as choosing
+// Equipment and that member in the camp menu does: the camp menu calls the
+// field's 0x021A120C(field, 3, slot), which sets the page scene's kind and
+// member and queues it. The hook is on the entry of the field step
+// (0x0218CBD4(field)) and jumps to that function with r1 = 3, r2 = slot, so
+// the step is skipped for one frame and the call returns to its caller.
+
+namespace {
+
+constexpr uint32_t kCtx = 0x020F33D8u;          // main loop context
+constexpr uint32_t kCtxMode = kCtx + 4u;        // u8
+constexpr uint32_t kCtxPartyEntity = kCtx + 8u; // u32 per slot 0..3
+constexpr uint32_t kCtxLeader = 14716u;         // u8, slot of the leader
+constexpr uint32_t kFieldQueue = 14076u;        // scene queue, head at +0
+constexpr uint32_t kMessageOwner = 0x020421BCu; // literal -> +28 = messages
+constexpr uint32_t kEntityBusy = 620u;          // u8
+constexpr uint32_t kEntityActing = 196u;        // u16, low 15 bits
+
+// The row of names at the bottom of the top screen: the clicks on each
+// name's rectangle were at y 176 to 188, four even slots of 64 px. Only the
+// top edge is needed (the names are the last thing at the bottom).
+constexpr int kRowTop = 172;
+
+// Why the field is not idle, as a bit mask (0 = idle): for the log.
+unsigned FieldBusy(uint32_t field) {
+    unsigned why = 0;
+    if (field == 0) return 1;
+    if (bus_read_u8(kCtxMode) != 0) why |= 2;
+    if (dq9::TitleScreen()) why |= 4;
+    if (dq9::InBattle()) why |= 8;
+    // A scene (camp menu, shop, battle...) is queued or running.
+    // The field's own scene (kind 0, seen in the log; 1 is 0x021ACDF4) is at
+    // the head when nothing else runs.
+    const uint32_t head = bus_read_u32(field + kFieldQueue);
+    if (head != 0 && bus_read_u8(head) > 1) why |= 16;
+    const uint32_t leader = bus_read_u8(kCtx + kCtxLeader);
+    const uint32_t player =
+        leader < 4 ? bus_read_u32(kCtxPartyEntity + 4u * leader) : 0u;
+    if (player == 0) {
+        why |= 32;
+    } else {
+        if (bus_read_u8(player + kEntityBusy) != 0) why |= 64;
+        if ((bus_read_u16(player + kEntityActing) & 0x7FFFu) != 0) why |= 128;
+    }
+    const uint32_t messages = bus_read_u32(bus_read_u32(kMessageOwner) + 28u);
+    if (messages != 0 && bus_read_u32(messages + 2456u) != 0) why |= 256;
+    return why;
+}
+
+}  // namespace
+
+// Entry of 0x0218CBD4 (the field step, r0 = field): true jumps to 0x021A120C
+// with r1 = 3 (the equipment page) and r2 = the member's slot.
+NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
+                                      uint32_t* slot) {
+    static unsigned seen = 0;
+    int x = 0, y = 0;
+    const unsigned clicks = nds_title_top_click(&x, &y);
+    if (clicks == seen) return false;
+    seen = clicks;
+    const unsigned busy = FieldBusy(*field);
+    const bool idle = busy == 0;
+    // The names row follows the party order, a list of character ids (not
+    // always 0..3 in order): ctx+22296, count at ctx+22300.
+    int members[4], count = bus_read_u8(kCtx + 22300u);
+    if (count > 4) count = 4;
+    for (int i = 0; i < count; ++i) members[i] = bus_read_u8(kCtx + 22296u + i);
+    int hit = -1;
+    if (idle && count > 0 && y >= kRowTop) hit = x * count / 256;
+    std::fprintf(stderr,
+                 "[dq9-top] click #%u xy=%d,%d idle=%d busy=0x%X members=%d -> %d\n",
+                 clicks, x, y, idle ? 1 : 0, busy, count,
+                 hit >= 0 ? members[hit] : -1);
+    if (hit < 0) return false;
+    *kind = 3u;
+    *slot = static_cast<uint32_t>(members[hit]);
+    return true;
 }

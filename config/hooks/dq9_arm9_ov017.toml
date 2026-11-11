@@ -24,3 +24,18 @@ address = 0x021AB0F4      # cmp r1, #0 (r1 = press edge; scene at 0x021AB0C0)
 mode = "arm"
 name = "Dq9MouseMenuTapPress"
 registers = ["r1", "sp"]
+
+# The top screen: a click on a party member's name opens the equipment page
+# (Dq9TopScreenClick in src/hooks/mouse_menus.cpp). The field step
+# 0x0218CBD4(field) is skipped for that frame: the hook jumps to the entry of
+# 0x021A120C(field, kind, slot), which the camp menu calls to open the page
+# scene for a member (kind 3 = equipment), and that returns to the step's
+# caller.
+[[hook]]
+address = 0x0218CBD4      # push {...} (field step, r0 = field)
+mode = "arm"
+name = "Dq9TopScreenClick"
+registers = ["r0", "r1", "r2"]
+on_true = "jump"
+jump_address = 0x021A120C
+on_false = "continue"
