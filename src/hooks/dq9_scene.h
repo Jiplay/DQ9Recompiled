@@ -17,6 +17,23 @@ inline int LoadedOverlay(uint32_t slot) {
     return static_cast<int8_t>(bus_read_u8(0x01FFD364 + 6 * bank + slot));
 }
 
+// The boot and title screens: the main loop (ctx 0x020F33D8, mode byte at
+// +4) runs them in mode 6. Continue sets mode 0 at once, but the title's
+// fade-out still runs from overlay 4 (slot 0) after that, so the title is
+// over only when overlay 4 is gone from its slot (see text_box_size.cpp,
+// InGame, which tests the same two things).
+inline bool TitleScreen() {
+    constexpr uint32_t kMainMode = 0x020F33D8 + 4;
+    constexpr uint8_t kTitleMode = 6;
+    constexpr int kTitleOverlay = 4;
+    return bus_read_u8(kMainMode) == kTitleMode ||
+           LoadedOverlay(0) == kTitleOverlay;
+}
+
+// Samples the scene for the forced screen layouts (screen_layouts.cpp), at a
+// consistent point on the CPU thread: G3_SwapBuffers, from Dq9WindowLayers.
+void SampleScreenLayout();
+
 // In battle: the field loads overlay 0 in slot 0 for it (see
 // text_box_size.cpp, InGame).
 inline bool InBattle() { return LoadedOverlay(0) == 0; }
