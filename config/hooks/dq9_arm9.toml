@@ -481,6 +481,26 @@ registers = ["r0", "r1", "r2", "r3", "r12", "cpsr"]
 on_true = "return"
 on_false = "continue"
 
+# Part 6: the 4bpp blitter 0x0204E1D8(desc, src, x, y; w, h, mask_odd,
+# mask_even on the stack), which ORs a glyph or frame bitmap into the
+# window's tile buffer ([desc + 8], 32 bytes a tile, [desc + 0xA8] tiles a
+# row, [desc + 0xAA] rows), two pixels per byte. Called for every glyph
+# (0x0204ECC4/0x0204EA6C, up to five times for outlined text) and by the frame
+# drawer 0x020435B8. The time-weighted profile of a choice
+# (performance-20261111-180942.jsonl) is dominated by its inner loop
+# 0x0204E26C..0x0204E3BC: the options and the choice frame are redrawn on
+# every pass. At 60 FPS the hook runs the same loop natively (quirks kept:
+# a pixel is written when its tile column OR row is in range, 16-bit
+# truncation of the coordinates and the offset) and returns.
+# Handler: src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x0204E1D8      # function entry, before push {r4-r11, lr}
+mode = "arm"
+name = "Dq9Blit4bpp"
+registers = ["r0", "r1", "r2", "r3", "r12", "sp"]
+on_true = "return"
+on_false = "continue"
+
 # Right click = the message box's "next" key, like B (0x403 = A/B/X in the
 # check at 0x020440DC, which sets r5 = 1). The hook runs after the second key
 # test, before `cmp r0, #0` at 0x02044168. Handler: Dq9TextAdvanceRightClick

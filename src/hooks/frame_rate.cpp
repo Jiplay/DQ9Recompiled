@@ -221,3 +221,74 @@ NDS_TITLE_HOOK bool Dq9KerningLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
     *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(count, count);
     return true;
 }
+
+namespace {
+
+int32_t S16(uint32_t v) { return static_cast<int16_t>(static_cast<uint16_t>(v)); }
+
+}  // namespace
+
+// At the entry of the 4bpp blitter 0x0204E1D8: r0 = the buffer descriptor,
+// r1 = the source bitmap (one byte per pair of pixels), r2 = x, r3 = y; on the
+// stack w, h, the source mask for odd columns and the one for even columns.
+// At 60 FPS it runs the guest loop natively, step for step, and returns true
+// (the bank then does `bx lr`, as the original's pop {pc}). r0, r4-r11 and
+// sp are as the guest leaves them; r1, r3 and r12 get their final values.
+NDS_TITLE_HOOK bool Dq9Blit4bpp(uint32_t* r0, uint32_t* r1, uint32_t* r2,
+                                uint32_t* r3, uint32_t* r12, uint32_t* sp) {
+    if (!Fast()) return false;
+    if (*r1 == 0u) return true;
+    const uint32_t desc = *r0;
+    const int32_t w = static_cast<int32_t>(bus_read_u32(*sp + 0u));
+    const int32_t h = static_cast<int32_t>(bus_read_u32(*sp + 4u));
+    const uint32_t mask_odd = bus_read_u32(*sp + 8u);
+    const uint32_t mask_even = bus_read_u32(*sp + 0xCu);
+    const int32_t tiles_x = S16(bus_read_u16(desc + 0xA8u));
+    const int32_t tiles_y = S16(bus_read_u16(desc + 0xAAu));
+    const uint32_t buf = bus_read_u32(desc + 8u);
+    const bool x_odd = (*r2 & 1u) != 0u;
+    uint32_t src = *r1;
+    int32_t y = static_cast<int32_t>(*r3);
+    for (int32_t row = 0; row < h; row = S16(static_cast<uint32_t>(row) + 1u)) {
+        const int32_t ty = S16(static_cast<uint32_t>(y >> 3));
+        const bool row_ok = ty >= 0 && ty < tiles_y;
+        const int32_t y_byte = static_cast<int32_t>(
+            static_cast<uint32_t>(y & 7) << 18) >> 16;
+        // smulbb: the low halves, signed.
+        const int32_t base = S16(static_cast<uint32_t>(ty)) * tiles_x;
+        int32_t x = static_cast<int32_t>(*r2);
+        for (int32_t col = 0; col < w; col = S16(static_cast<uint32_t>(col) + 1u)) {
+            const int32_t tx = S16(static_cast<uint32_t>(x >> 3));
+            const bool ok = (tx >= 0 && tx < tiles_x) || row_ok;
+            const int32_t tile = S16(static_cast<uint32_t>(base + tx));
+            const int32_t tile_bytes =
+                static_cast<int32_t>(static_cast<uint32_t>(tile) << 21) >> 16;
+            int32_t idx = S16(static_cast<uint32_t>(
+                (S16(static_cast<uint32_t>(x & 7) << 16 >> 16) >> 1) + tile_bytes));
+            idx = S16(static_cast<uint32_t>(idx + y_byte));
+            const uint32_t addr = buf + static_cast<uint32_t>(idx);
+            const bool odd_col = (col & 1) != 0;
+            if (ok) {
+                uint32_t b = bus_read_u8(addr);
+                const uint32_t v =
+                    bus_read_u8(src) & (odd_col ? mask_odd : mask_even) & 0xFFu;
+                if (v != 0u) {
+                    if (x_odd) {
+                        b = odd_col ? ((b & 0xF0u) | (v >> 4))
+                                    : ((b & 0x0Fu) | ((v << 4) & 0xFFu));
+                    } else {
+                        b = odd_col ? ((b & 0x0Fu) | v) : ((b & 0xF0u) | v);
+                    }
+                }
+                bus_write_u8(addr, static_cast<uint8_t>(b));
+            }
+            if (odd_col) ++src;
+            x = S16(static_cast<uint32_t>(x) + 1u);
+        }
+        y = S16(static_cast<uint32_t>(y) + 1u);
+    }
+    *r1 = src;
+    *r3 = static_cast<uint32_t>(y);
+    *r12 = buf;
+    return true;
+}
