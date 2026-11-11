@@ -157,6 +157,36 @@ NDS_TITLE_HOOK void Dq9InteractPrompt() {
     ScaleAboutCentre();
 }
 
+// Icons the field draws over a world point (the harvest spot's sprite, among
+// others): ov17 projects the point to the screen (0x0202EC94), stores the
+// sprite's position minus (12, 40) px at +0x1C / +0x20 (fx32) and draws it
+// with 0x020473D8, which pushes and pops by itself. Begin (before that call,
+// r0 = the sprite) pushes the position matrix and scales about the sprite's
+// own anchor point (+12, +40 px), so it stays on its point; End (right after) pops. Both are
+// always sent, so they pair.
+NDS_TITLE_HOOK void Dq9WorldIconBegin(uint32_t* sprite) {
+    bus_write_u32(kMtxPush, 0);
+    const int32_t k = TextBoxScale();
+    if (k >= kOne) return;
+    // The stored position is the projected point minus (12, 40) px (its top
+    // left corner): scale about the point itself, so the icon keeps sitting on
+    // its spot instead of drifting towards its corner.
+    const int64_t ax =
+        static_cast<int32_t>(bus_read_u32(*sprite + 0x1C)) + (12 << 12);
+    const int64_t ay =
+        static_cast<int32_t>(bus_read_u32(*sprite + 0x20)) + (40 << 12);
+    bus_write_u32(kMtxTrans, static_cast<uint32_t>(ax * (kOne - k) / kOne));
+    bus_write_u32(kMtxTrans, static_cast<uint32_t>(ay * (kOne - k) / kOne));
+    bus_write_u32(kMtxTrans, 0);
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(kOne));
+}
+
+NDS_TITLE_HOOK void Dq9WorldIconEnd() {
+    bus_write_u32(kMtxPop, 1);
+}
+
 namespace {
 // A choice window was drawn (0x0205C97C) since the last G3_SwapBuffers.
 bool g_choice_drawn = false;
