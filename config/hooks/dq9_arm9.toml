@@ -375,14 +375,6 @@ mode = "arm"
 name = "Dq9MouseMenuTapChoose"
 registers = ["r0"]
 
-# The OAM upload 0x0203BDC0, engine B part: before the copy (0x020C59E0, a DMA)
-# of the shadow (0x021056B4) to OAM. Raises the hovered name of the party row
-# on the top screen (Dq9NamesHoverUpload, mouse_menus.cpp).
-[[hook]]
-address = 0x0203BE04      # ldr r0, =0x021056B4 (before the B shadow copy)
-mode = "arm"
-name = "Dq9NamesHoverUpload"
-
 # Click on the top screen (or a new right click in the results box, manager
 # state 3) = A, while a message box is up. The per-frame pad
 # update 0x020122AC(pad) stores the keys held this frame (r0, from

@@ -90,7 +90,8 @@ registers = ["r1", "sp"]
 # 0x0218CBD4(field) is skipped for that frame: the hook jumps to the entry of
 # 0x021A120C(field, kind, slot), which the camp menu calls to open the page
 # scene for a member (kind 3 = equipment), and that returns to the step's
-# caller.
+# caller. The same hook, every field frame, raises the name tab under the
+# mouse through the tab's own state (0x020FDC60), as the camp menu does.
 [[hook]]
 address = 0x0218CBD4      # push {...} (field step, r0 = field)
 mode = "arm"

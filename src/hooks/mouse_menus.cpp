@@ -11,6 +11,7 @@
 // (Yes/No; "part 4" in config/hooks/dq9_arm9.toml).
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 
 #include "dq9_scene.h"
 #include "title_hooks.h"
@@ -354,15 +355,26 @@ constexpr uint32_t kMessageOwner = 0x020421BCu; // literal -> +28 = messages
 constexpr uint32_t kEntityBusy = 620u;          // u8
 constexpr uint32_t kEntityActing = 196u;        // u16, low 15 bits
 
-// The row of names at the bottom of the top screen: the clicks on each
-// name's rectangle were at y 176 to 188, four even slots of 64 px. Only the
-// top edge is needed (the names are the last thing at the bottom).
-constexpr int kRowTop = 172;
-// The hovered name's sprite (64x64, y 176 at rest) is raised by kNameRaise
-// px to show the character's status; g_raised_x is the x of the one raised
-// last frame (-1 if none), and the click row extends over it.
-constexpr int kNameRest = 176, kNameRaise = 40;
-int g_raised_x = -1;
+// The row of names at the bottom of the top screen: one 64x64 tab per party
+// member, at x = 64 * position (0x02027110 draws them), y 176 at rest (only
+// its top rows on screen). Clicks on the names were at y 176 to 188; the
+// row's hot zone starts a little higher.
+constexpr int kRowTop = 172, kTabWidth = 64;
+
+// Each tab's state, per party position i, at 0x020FDC60 + 20 * i, stepped
+// every frame by 0x0201FA3C: +0 mode (1 down, 3 rising, 2 up, 4 lowering),
+// +1 request (3 = rise, taken in mode 1; 4 = lower, taken in mode 2 when +2
+// is 0), +2 hold flags, +4 u16 time it stays up (0 = until lowered), +16
+// float y (176.0 down, 136.0 up). Raised, the tab shows the member's level,
+// class, HP and MP with their bars: the game draws those sprites from this
+// state. 0x0201FBBC raises a tab for good (request 3, time 0), as the camp
+// menu and a hit in a battle do; the hover does the same.
+constexpr uint32_t kTabState = 0x020FDC60u, kTabStateSize = 20u;
+constexpr uint8_t kTabDown = 1, kTabUp = 2, kTabRising = 3, kTabLowering = 4;
+
+// The raised tab under the mouse (x of its left edge, -1 if none, and the
+// top of its sprite): a click on it opens the equipment page too.
+int g_raised_x = -1, g_raised_top = 0;
 
 // Why the field is not idle, as a bit mask (0 = idle): for the log.
 unsigned FieldBusy(uint32_t field) {
@@ -390,29 +402,78 @@ unsigned FieldBusy(uint32_t field) {
     return why;
 }
 
+// The party's size (the names row follows the party order, a list of
+// character ids, not always 0..3 in order: ctx+22296, count at ctx+22300).
+int PartyCount() {
+    const int count = bus_read_u8(kCtx + 22300u);
+    return count > 4 ? 4 : count;
+}
+
+// Raises the tab under the mouse and lowers it once the mouse leaves, through
+// the tab's own state, so it moves (and shows the status) as when the camp
+// menu raises it. Only the tabs the hover raised are lowered by it; while a
+// scene runs (the camp menu, a shop...) the tabs are left to the game.
+void HoverTabs(unsigned busy) {
+    static bool raised_by_hover[4] = {false, false, false, false};
+    const bool blocked = (busy & (2u | 4u | 8u | 16u)) != 0;
+    int px = 0, py = 0;
+    const bool over = nds_title_top_pointer(&px, &py);
+    const int count = PartyCount();
+    g_raised_x = -1;
+    for (int i = 0; i < 4; ++i) {
+        const uint32_t state = kTabState + kTabStateSize * static_cast<uint32_t>(i);
+        if (blocked || i >= count) {
+            raised_by_hover[i] = false;
+            continue;
+        }
+        const uint8_t mode = bus_read_u8(state);
+        const uint32_t ybits = bus_read_u32(state + 16u);
+        float yf = 0.0f;
+        std::memcpy(&yf, &ybits, sizeof yf);
+        const int top = static_cast<int>(yf);
+        // Stay hot over the whole raised sprite (y top..191), or it would
+        // drop as it rises past the pointer.
+        const int x = kTabWidth * i;
+        const bool hot = over && px >= x && px < x + kTabWidth &&
+                         py >= (top < kRowTop ? top : kRowTop);
+        if (hot) {
+            raised_by_hover[i] = true;
+            if (mode == kTabDown || mode == kTabLowering) bus_write_u8(state + 1u, 3);
+            bus_write_u16(state + 4u, 0);  // stays up while hovered
+            if (mode == kTabUp || mode == kTabRising) {
+                g_raised_x = x;
+                g_raised_top = top;
+            }
+        } else if (raised_by_hover[i]) {
+            if (mode == kTabUp || mode == kTabRising) bus_write_u8(state + 1u, 4);
+            else if (mode == kTabDown) raised_by_hover[i] = false;
+        }
+    }
+}
+
 }  // namespace
 
-// Entry of 0x0218CBD4 (the field step, r0 = field): true jumps to 0x021A120C
-// with r1 = 3 (the equipment page) and r2 = the member's slot.
+// Entry of 0x0218CBD4 (the field step, r0 = field), every field frame: the
+// hover on the names row, then a click on it, which jumps to 0x021A120C with
+// r1 = 3 (the equipment page) and r2 = the member's character id.
 NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
                                       uint32_t* slot) {
+    const unsigned busy = FieldBusy(*field);
+    HoverTabs(busy);
     static unsigned seen = 0;
     int x = 0, y = 0;
     const unsigned clicks = nds_title_top_click(&x, &y);
     if (clicks == seen) return false;
     seen = clicks;
-    const unsigned busy = FieldBusy(*field);
     const bool idle = busy == 0;
-    // The names row follows the party order, a list of character ids (not
-    // always 0..3 in order): ctx+22296, count at ctx+22300.
-    int members[4], count = bus_read_u8(kCtx + 22300u);
-    if (count > 4) count = 4;
+    int members[4];
+    const int count = PartyCount();
     for (int i = 0; i < count; ++i) members[i] = bus_read_u8(kCtx + 22296u + i);
     int hit = -1;
     const bool on_raised = g_raised_x >= 0 && x >= g_raised_x &&
-                           x < g_raised_x + 64 && y >= kNameRest - kNameRaise;
-    if (idle && count > 0 && (y >= kRowTop || on_raised))
-        hit = x * count / 256;
+                           x < g_raised_x + kTabWidth && y >= g_raised_top;
+    if (idle && (y >= kRowTop || on_raised) && x >= 0 && x / kTabWidth < count)
+        hit = x / kTabWidth;
     std::fprintf(stderr,
                  "[dq9-top] click #%u xy=%d,%d idle=%d busy=0x%X members=%d -> %d\n",
                  clicks, x, y, idle ? 1 : 0, busy, count,
@@ -423,52 +484,10 @@ NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
     return true;
 }
 
-// ---- Hover raise of the names row -----------------------------------------
-// The party's names on the top screen are four 64x64 OBJs (attr0 = 0x00B0:
-// y 176, square; attr1 size 3) in the top engine's OAM (engine B, the upper
-// screen in the field). The game rebuilds the OAM shadow buffers every frame
-// and copies them to OAM (0x0203BDC0; shadow B at 0x021056B4, copied by
-// 0x020C59E0). The hook sits right before that copy, so the sprite under the
-// pointer goes out kRaise px higher; the next frame rebuilds it.
-namespace {
-void NoteTopClick();
-}
-NDS_TITLE_HOOK void Dq9NamesHoverUpload() {
-    NoteTopClick();
-    constexpr uint32_t kShadowB = 0x021056B4u;
-    // The sprite is 64x64: 16 rows are on screen at rest, the character's
-    // status is in the rows below the edge. Hovering raises it, eased over a
-    // few frames (this runs once per frame): offset[slot] goes from 0 to
-    // kNameRaise and back, slot = sprite x / 64.
-    static int offset[4] = {0, 0, 0, 0};
-    int px = 0, py = 0;
-    const bool over = nds_title_top_pointer(&px, &py);
-    int hot_x = -1;
-    for (uint32_t i = 0; i < 128; ++i) {
-        const uint32_t at = kShadowB + 8u * i;
-        const uint32_t a0 = bus_read_u16(at), a1 = bus_read_u16(at + 2);
-        if ((a0 & 0xFF00u) != 0 || (a1 & 0xC000u) != 0xC000u) continue;
-        if (static_cast<int>(a0 & 0xFFu) != kNameRest) continue;
-        const int x = static_cast<int>(a1 & 0x1FFu);
-        const int slot = x / 64 & 3;
-        // Once raised, the sprite covers y (rest - offset)..191: stay hot
-        // while the pointer is on it, or it would drop as it rises.
-        const int top = offset[slot] > 0 ? kNameRest - offset[slot] : kRowTop;
-        const bool hot = over && px >= x && px < x + 64 && py >= top;
-        const int target = hot ? kNameRaise : 0;
-        const int diff = target - offset[slot];
-        if (diff != 0) offset[slot] += diff > 0 ? (diff + 2) / 3 : (diff - 2) / 3;
-        if (hot) hot_x = x;
-        if (offset[slot] > 0)
-            bus_write_u16(at, static_cast<uint16_t>(kNameRest - offset[slot]));
-    }
-    g_raised_x = hot_x;
-}
-
 // ---- Top-screen click advances the message box --------------------------------
 // The message manager's input check (0x020440DC) runs every frame while a box
 // is up; it sets r5 = 1 when a key or a stylus tap asks to go on. A click on
-// the top screen counts as that tap. The OAM upload hook (every frame) stamps
+// the top screen counts as that tap. The pad update hook (every frame) stamps
 // the time of each new click (NoteTopClick), so one made while no box was up
 // is stale after a quarter of a second and does not close the next box.
 namespace {
