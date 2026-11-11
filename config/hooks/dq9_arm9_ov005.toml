@@ -19,3 +19,87 @@ address = 0x02158F0C      # beq (Z = pen not down; list redraw)
 mode = "arm"
 name = "Dq9MouseMenuListGreen"
 registers = ["cpsr"]
+
+# Part 8: the equipment page (camp menu > Equipment, or a click on a name on
+# the top screen). The scene object s (r4/r5 below) keeps the page state at
+# s+0x3DB8 (u8: 2 = tabs, 3 = the equipped item's box, 4 = the 4x4 item grid;
+# the keypad step 0x0215730C only drives these three), the cursor entry at
+# s+0x3DBB (8..23 = grid cell, 0 = the box) and the item being dragged at
+# s+0x3D78 (s16, -1 = none) / s+0x3DC0 (u8, 0xFF = none). The green cursor is
+# moved by 0x021579EC(s, state, entry).
+#
+# Each frame the page step (0x0215BE60, 0x0215BED4 or 0x0215BF58, one per
+# phase) runs the pen step 0x021562B8 on any pen activity, else the keypad
+# step. On a press the pen step picks up the item under the pen (0x021567AC:
+# state 4, cursor, then the drag) or, on the box (x > 131, 21 < y < 46),
+# moves the cursor to it (0x02156400). So the cursor only moved on a click.
+#
+# With the setting on, when the mouse moves onto a grid cell or the box that
+# is not the cursor yet (no button held, no drag), the page step takes the
+# pen step for one frame with a press at the mouse position; the press
+# moves the cursor there and stops before the drag starts, and the model
+# hit-test 0x0215690C is skipped. Empty cells take the cursor too, as with
+# the keypad.
+[[hook]]
+address = 0x0215BE84      # cmp r1, #0 (r1 = press edge, r4 = s)
+mode = "arm"
+name = "Dq9MouseMenuEquipStep"
+registers = ["r1", "r4"]
+
+[[hook]]
+address = 0x0215BEE8      # cmp r0, #0 (r0 = press edge, r4 = s)
+mode = "arm"
+name = "Dq9MouseMenuEquipStep"
+registers = ["r0", "r4"]
+
+[[hook]]
+address = 0x0215BF6C      # cmp r0, #0 (r0 = press edge, r5 = s)
+mode = "arm"
+name = "Dq9MouseMenuEquipStep"
+registers = ["r0", "r5"]
+
+[[hook]]
+address = 0x021562EC      # cmp r1, #0 in 0x021562B8 (r1 = press edge; pen x sp+4, y sp+0)
+mode = "arm"
+name = "Dq9MouseMenuEquipPress"
+registers = ["r1", "sp"]
+
+# Z clear = the page is closing (entity +0x634 bit 0x800, set by B): a press
+# then buzzes and closes. The hover leaves instead.
+[[hook]]
+address = 0x02156338      # beq (Z set = not closing)
+mode = "arm"
+name = "Dq9MouseMenuEquipClosing"
+registers = ["cpsr"]
+on_true = "jump"
+jump_address = 0x02156648 # the pen step's return
+on_false = "continue"
+
+# r3 = the item in the cell (-1 = empty, and the press stops). The hover
+# goes on with empty cells.
+[[hook]]
+address = 0x02156828      # cmp r3, r1 (r1 = -1)
+mode = "arm"
+name = "Dq9MouseMenuEquipCell"
+registers = ["r3"]
+
+# The cursor is on the cell (state 4, s+0x3DBB, the list widget). The hover
+# stops here: no drag (s+0x3D78 back to -1), no sound, flags untouched.
+[[hook]]
+address = 0x02156880      # add r0, r5, #0x3D00 (after bl 0x0205BB14; r5 = s)
+mode = "arm"
+name = "Dq9MouseMenuEquipPicked"
+registers = ["r5"]
+on_true = "jump"
+jump_address = 0x021568EC # pop {r3-r7, pc}
+on_false = "continue"
+
+# The model hit-test (touching the character picks a category, or the box
+# picks up the equipped item): skipped on the hover.
+[[hook]]
+address = 0x021563E0      # bl 0x0215690C
+mode = "arm"
+name = "Dq9MouseMenuEquipSkipModel"
+on_true = "jump"
+jump_address = 0x021563E4
+on_false = "continue"

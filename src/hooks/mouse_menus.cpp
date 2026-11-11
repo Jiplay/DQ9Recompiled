@@ -8,7 +8,9 @@
 // config/hooks/dq9_arm9_ov023.toml) and the window lists of the main ARM9
 // (camp menu, priest...; "part 2" in config/hooks/dq9_arm9.toml, and their
 // green look, part 3, in the overlay manifests) and the simple choice lists
-// (Yes/No; "part 4" in config/hooks/dq9_arm9.toml).
+// (Yes/No; "part 4" in config/hooks/dq9_arm9.toml), the layout menus (part
+// 5), the name keyboard (part 7, dq9_arm9_ov003.toml) and the equipment page
+// (part 8, dq9_arm9_ov005.toml).
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -333,6 +335,89 @@ NDS_TITLE_HOOK void Dq9MouseMenuKeyFound(uint32_t* key, uint32_t* kb) {
     if (*key != 0u) bus_write_u32(*kb, *key);
     *key = 0u;
 }
+
+// Equipment page: see "part 8" in config/hooks/dq9_arm9_ov005.toml.
+
+namespace {
+constexpr uint32_t kEquipHeld = 0x3D78u;   // s16, item being dragged, -1 none
+constexpr uint32_t kEquipState = 0x3DB8u;  // u8: 2 tabs, 3 box, 4 grid
+constexpr uint32_t kEquipCursor = 0x3DBBu; // u8, 8..23 grid cell
+constexpr uint32_t kEquipDrag = 0x3DC0u;   // u8, 0xFF = no drag
+constexpr uint8_t kEquipBox = 3, kEquipGrid = 4;
+
+bool g_equip_hover = false;
+int g_equip_hover_x = 0, g_equip_hover_y = 0;
+
+// What the pen step does with a press at (x, y): the grid cell (8..23) or
+// the box (0) it moves the cursor to, or -1. The grid's rects are those of
+// 0x02155670, the box's those of 0x0215690C.
+int EquipTarget(int x, int y) {
+    for (int i = 0; i < 16; ++i) {
+        const int cx = 141 + 26 * (i % 4), cy = 52 + 26 * (i / 4);
+        if (x >= cx && x <= cx + 24 && y >= cy && y <= cy + 24) return i + 8;
+    }
+    if (x > 132 && x < 157 && y > 22 && y < 45) return 0;
+    return -1;
+}
+}  // namespace
+
+// Before `cmp rN, #0` after the page step reads the press edge: s is the
+// page. When the mouse has moved onto a cell or the box that is not the
+// cursor, take the pen step this frame (Dq9MouseMenuEquipPress makes it a
+// press at the mouse position).
+NDS_TITLE_HOOK void Dq9MouseMenuEquipStep(uint32_t* press, uint32_t* s) {
+    g_equip_hover = false;
+    if (!Enabled() || *press != 0u) return;
+    int x = 0, y = 0;
+    if (!HoverMoved(*s, &x, &y)) return;
+    const uint8_t state = bus_read_u8(*s + kEquipState);
+    if (state < 2 || state > kEquipGrid) return;
+    if (bus_read_u8(*s + kEquipDrag) != 0xFFu) return;
+    if (static_cast<int16_t>(bus_read_u16(*s + kEquipHeld)) != -1) return;
+    const int target = EquipTarget(x, y);
+    if (target < 0) return;
+    if (target == 0 && state == kEquipBox) return;
+    if (target >= 8 && state == kEquipGrid &&
+        bus_read_u8(*s + kEquipCursor) == target)
+        return;
+    g_equip_hover = true;
+    g_equip_hover_x = x;
+    g_equip_hover_y = y;
+    *press = 1u;
+}
+
+// Before `cmp r1, #0` at 0x021562EC (the pen step): r1 is the press edge,
+// the pen position is at sp+4 / sp+0.
+NDS_TITLE_HOOK void Dq9MouseMenuEquipPress(uint32_t* press, uint32_t* sp) {
+    if (!g_equip_hover) return;
+    *press = 1u;
+    bus_write_u32(*sp + 4u, static_cast<uint32_t>(g_equip_hover_x));
+    bus_write_u32(*sp + 0u, static_cast<uint32_t>(g_equip_hover_y));
+}
+
+// Before `beq` at 0x02156338: Z clear means the page is closing. The hover
+// returns from the pen step instead of buzzing.
+NDS_TITLE_HOOK bool Dq9MouseMenuEquipClosing(uint32_t* cpsr) {
+    if (!g_equip_hover || (*cpsr & kCpsrZ) != 0u) return false;
+    g_equip_hover = false;
+    return true;
+}
+
+// Before `cmp r3, r1` at 0x02156828: r3 is the cell's item, -1 when empty.
+NDS_TITLE_HOOK void Dq9MouseMenuEquipCell(uint32_t* item) {
+    if (g_equip_hover) *item = 0u;
+}
+
+// At 0x02156880: the cursor is on the cell. The hover returns before the
+// drag starts (the flag stays set for Dq9MouseMenuEquipSkipModel).
+NDS_TITLE_HOOK bool Dq9MouseMenuEquipPicked(uint32_t* s) {
+    if (!g_equip_hover) return false;
+    bus_write_u16(*s + kEquipHeld, 0xFFFFu);
+    return true;
+}
+
+// Before `bl 0x0215690C` at 0x021563E0: the hover skips the model hit-test.
+NDS_TITLE_HOOK bool Dq9MouseMenuEquipSkipModel() { return g_equip_hover; }
 
 // The top screen (see HANDOFF_TOP_SCREEN.md and config/hooks/dq9_arm9_ov017.toml).
 //
