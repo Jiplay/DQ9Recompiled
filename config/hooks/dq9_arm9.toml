@@ -383,6 +383,19 @@ address = 0x0203BE04      # ldr r0, =0x021056B4 (before the B shadow copy)
 mode = "arm"
 name = "Dq9NamesHoverUpload"
 
+# Click on the top screen (or a new right click in the results box, manager
+# state 3) = A, while a message box is up. The per-frame pad
+# update 0x020122AC(pad) stores the keys held this frame (r0, from
+# 0x02012364) at `strh r0, [r5]`; the game's own "pressed" test is
+# held & !previous, so OR-ing A in for one frame is a real press for
+# whatever code waits on the box (the manager's page break, the battle
+# results, ...). Handler: Dq9MessageTopClick in src/hooks/mouse_menus.cpp.
+[[hook]]
+address = 0x0201232C      # strh r0, [r5] (r0 = keys held this frame)
+mode = "arm"
+name = "Dq9MessageTopClick"
+registers = ["r0"]
+
 # Instant text (B prints the whole box). The message manager's step
 # _sub_020444E4_0 (0x020444E4, body 0x02065xxx) prints text each frame: R4 is
 # the speed (0x10 = one character per frame, 0x18 fast), the accumulator at

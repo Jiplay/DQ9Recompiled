@@ -9,6 +9,7 @@
 // (camp menu, priest...; "part 2" in config/hooks/dq9_arm9.toml, and their
 // green look, part 3, in the overlay manifests) and the simple choice lists
 // (Yes/No; "part 4" in config/hooks/dq9_arm9.toml).
+#include <chrono>
 #include <cstdio>
 
 #include "dq9_scene.h"
@@ -429,7 +430,11 @@ NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
 // and copies them to OAM (0x0203BDC0; shadow B at 0x021056B4, copied by
 // 0x020C59E0). The hook sits right before that copy, so the sprite under the
 // pointer goes out kRaise px higher; the next frame rebuilds it.
+namespace {
+void NoteTopClick();
+}
 NDS_TITLE_HOOK void Dq9NamesHoverUpload() {
+    NoteTopClick();
     constexpr uint32_t kShadowB = 0x021056B4u;
     // The sprite is 64x64: 16 rows are on screen at rest, the character's
     // status is in the rows below the edge. Hovering raises it, eased over a
@@ -458,4 +463,70 @@ NDS_TITLE_HOOK void Dq9NamesHoverUpload() {
             bus_write_u16(at, static_cast<uint16_t>(kNameRest - offset[slot]));
     }
     g_raised_x = hot_x;
+}
+
+// ---- Top-screen click advances the message box --------------------------------
+// The message manager's input check (0x020440DC) runs every frame while a box
+// is up; it sets r5 = 1 when a key or a stylus tap asks to go on. A click on
+// the top screen counts as that tap. The OAM upload hook (every frame) stamps
+// the time of each new click (NoteTopClick), so one made while no box was up
+// is stale after a quarter of a second and does not close the next box.
+namespace {
+using MsgClock = std::chrono::steady_clock;
+unsigned g_msg_click_seen = 0;   // last click count noted
+unsigned g_msg_click_used = 0;   // last click count that advanced a box
+MsgClock::time_point g_msg_click_at;
+
+void NoteTopClick() {
+    int x = 0, y = 0;
+    const unsigned clicks = nds_title_top_click(&x, &y);
+    if (clicks != g_msg_click_seen) {
+        g_msg_click_seen = clicks;
+        g_msg_click_at = MsgClock::now();
+    }
+}
+}  // namespace
+
+// Before `strh r0, [r5]` at 0x0201232C (the pad update): r0 = keys held this
+// frame. A fresh click on the top screen while a message box is up adds A for
+// this one frame (the next frame's update drops it again).
+NDS_TITLE_HOOK void Dq9MessageTopClick(uint32_t* held) {
+    NoteTopClick();
+    const uint32_t owner = bus_read_u32(kMessageOwner);
+    const uint32_t messages = owner != 0 ? bus_read_u32(owner + 28u) : 0u;
+    const bool box_up = messages != 0 && bus_read_u32(messages + 2456u) != 0;
+    // A new right click advances a box that has finished printing, as in the
+    // dialogues (Dq9TextAdvanceRightClick, text_instant.cpp, sets the
+    // manager's advance flag, and Dq9TextInstant prints the text at once
+    // while the button is held). The results box waits in manager state 3,
+    // which that flag does not release: press A for it. Only in state 3, so
+    // the other boxes do not advance twice.
+    static bool right_was_down = false;
+    const bool right = nds_title_right_mouse_held();
+    // A new B press does the same as a new right click (holding B already
+    // prints the text at once, Dq9TextInstant).
+    static bool b_was_down = false;
+    const bool b_down = (*held & 2u) != 0u;
+    const bool right_click = (right && !right_was_down) || (b_down && !b_was_down);
+    right_was_down = right;
+    b_was_down = b_down;
+    // State 3 holds while the text prints too, so a press during printing
+    // would print and advance at once. The box has finished printing when
+    // its print position (+120) has not moved for a few frames (slow text
+    // moves less than a character per frame).
+    static uint32_t last_pos = 0, last_box = 0;
+    static int still = 0;
+    const uint32_t pos = box_up ? bus_read_u32(messages + 120u) : 0u;
+    if (messages != last_box || pos != last_pos) still = 0;
+    else if (still < 1000) ++still;
+    last_box = messages;
+    last_pos = pos;
+    if (box_up && right_click && bus_read_u32(messages + 2464u) == 3u &&
+        still >= 8)
+        *held |= 1u;  // A
+    if (g_msg_click_seen == g_msg_click_used) return;
+    g_msg_click_used = g_msg_click_seen;
+    if (MsgClock::now() - g_msg_click_at >= std::chrono::milliseconds(250))
+        return;
+    if (box_up) *held |= 1u;  // A
 }
