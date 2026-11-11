@@ -510,3 +510,22 @@ address = 0x02044168      # cmp r0, #0 (r5 = "advance" flag)
 mode = "arm"
 name = "Dq9TextAdvanceRightClick"
 registers = ["r5"]
+
+# Analog stick movement: the left stick walks at any angle. The
+# hero's per-frame movement 0x02038148(hero) takes the D-pad first: it sets
+# a direction code hero+0x250 = 8..15 (up, down, left, right, then the
+# diagonals) and walks at the code's angle (table 0x020E781C, fx12 radians
+# from 0 = down towards right) plus the camera yaw (0x0202E800), wrapped to
+# [0, 2pi) by 0x02030F40. Then, unless hero+0x255 already holds this code,
+# it snaps the angle to a nearby path's direction (0x0201E90C, +0x18) or its
+# opposite when within pi/4, caching it in hero+0x255 / +0x256. The hook
+# swaps the code's angle for the left stick's and jumps past the snap to
+# 0x02038490, which clears the cache and walks (0x02033844(hero, r6)), as
+# the stylus path does. Handler: src/hooks/analog_movement.cpp.
+[[hook]]
+address = 0x020383F0      # cmp r3, r2 (r2 = code, r6 = angle + yaw, wrapped)
+mode = "arm"
+name = "Dq9AnalogMovement"
+registers = ["r2", "r6"]
+on_true = "jump"
+jump_address = 0x02038490 # mvn r0, #0 ; strb r0, [r4, #0x255] ; walk at r6
