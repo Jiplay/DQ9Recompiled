@@ -357,6 +357,11 @@ constexpr uint32_t kEntityActing = 196u;        // u16, low 15 bits
 // name's rectangle were at y 176 to 188, four even slots of 64 px. Only the
 // top edge is needed (the names are the last thing at the bottom).
 constexpr int kRowTop = 172;
+// The hovered name's sprite (64x64, y 176 at rest) is raised by kNameRaise
+// px to show the character's status; g_raised_x is the x of the one raised
+// last frame (-1 if none), and the click row extends over it.
+constexpr int kNameRest = 176, kNameRaise = 40;
+int g_raised_x = -1;
 
 // Why the field is not idle, as a bit mask (0 = idle): for the log.
 unsigned FieldBusy(uint32_t field) {
@@ -403,7 +408,10 @@ NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
     if (count > 4) count = 4;
     for (int i = 0; i < count; ++i) members[i] = bus_read_u8(kCtx + 22296u + i);
     int hit = -1;
-    if (idle && count > 0 && y >= kRowTop) hit = x * count / 256;
+    const bool on_raised = g_raised_x >= 0 && x >= g_raised_x &&
+                           x < g_raised_x + 64 && y >= kNameRest - kNameRaise;
+    if (idle && count > 0 && (y >= kRowTop || on_raised))
+        hit = x * count / 256;
     std::fprintf(stderr,
                  "[dq9-top] click #%u xy=%d,%d idle=%d busy=0x%X members=%d -> %d\n",
                  clicks, x, y, idle ? 1 : 0, busy, count,
@@ -423,16 +431,27 @@ NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
 // pointer goes out kRaise px higher; the next frame rebuilds it.
 NDS_TITLE_HOOK void Dq9NamesHoverUpload() {
     constexpr uint32_t kShadowB = 0x021056B4u;
-    constexpr uint32_t kRest = 176u, kRaise = 4u;
+    // The sprite is 64x64: 16 rows are on screen at rest, the character's
+    // status is in the rows below the edge. Hovering raises it.
     int px = 0, py = 0;
-    if (!nds_title_top_pointer(&px, &py) || py < 172) return;
+    if (!nds_title_top_pointer(&px, &py)) {
+        g_raised_x = -1;
+        return;
+    }
+    int hot_x = -1;
     for (uint32_t i = 0; i < 128; ++i) {
         const uint32_t at = kShadowB + 8u * i;
         const uint32_t a0 = bus_read_u16(at), a1 = bus_read_u16(at + 2);
         if ((a0 & 0xFF00u) != 0 || (a1 & 0xC000u) != 0xC000u) continue;
-        if ((a0 & 0xFFu) != kRest) continue;
+        if (static_cast<int>(a0 & 0xFFu) != kNameRest) continue;
         const int x = static_cast<int>(a1 & 0x1FFu);
-        if (px >= x && px < x + 64)
-            bus_write_u16(at, static_cast<uint16_t>(kRest - kRaise));
+        if (px < x || px >= x + 64) continue;
+        // Once raised, the sprite covers y (rest - raise)..191: stay up while
+        // the pointer is on it, or it would drop as soon as it rises.
+        const int top = (x == g_raised_x) ? kNameRest - kNameRaise : kRowTop;
+        if (py < top) continue;
+        bus_write_u16(at, static_cast<uint16_t>(kNameRest - kNameRaise));
+        hot_x = x;
     }
+    g_raised_x = hot_x;
 }
