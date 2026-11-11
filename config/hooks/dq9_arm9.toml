@@ -374,3 +374,11 @@ address = 0x02080E28      # tst r0, #4 (r0 = flags of the item hit, bit 2 = touc
 mode = "arm"
 name = "Dq9MouseMenuTapChoose"
 registers = ["r0"]
+
+# The OAM upload 0x0203BDC0, engine B part: before the copy (0x020C59E0, a DMA)
+# of the shadow (0x021056B4) to OAM. Raises the hovered name of the party row
+# on the top screen (Dq9NamesHoverUpload, mouse_menus.cpp).
+[[hook]]
+address = 0x0203BE04      # ldr r0, =0x021056B4 (before the B shadow copy)
+mode = "arm"
+name = "Dq9NamesHoverUpload"

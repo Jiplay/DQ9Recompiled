@@ -413,3 +413,26 @@ NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
     *slot = static_cast<uint32_t>(members[hit]);
     return true;
 }
+
+// ---- Hover raise of the names row -----------------------------------------
+// The party's names on the top screen are four 64x64 OBJs (attr0 = 0x00B0:
+// y 176, square; attr1 size 3) in the top engine's OAM (engine B, the upper
+// screen in the field). The game rebuilds the OAM shadow buffers every frame
+// and copies them to OAM (0x0203BDC0; shadow B at 0x021056B4, copied by
+// 0x020C59E0). The hook sits right before that copy, so the sprite under the
+// pointer goes out kRaise px higher; the next frame rebuilds it.
+NDS_TITLE_HOOK void Dq9NamesHoverUpload() {
+    constexpr uint32_t kShadowB = 0x021056B4u;
+    constexpr uint32_t kRest = 176u, kRaise = 4u;
+    int px = 0, py = 0;
+    if (!nds_title_top_pointer(&px, &py) || py < 172) return;
+    for (uint32_t i = 0; i < 128; ++i) {
+        const uint32_t at = kShadowB + 8u * i;
+        const uint32_t a0 = bus_read_u16(at), a1 = bus_read_u16(at + 2);
+        if ((a0 & 0xFF00u) != 0 || (a1 & 0xC000u) != 0xC000u) continue;
+        if ((a0 & 0xFFu) != kRest) continue;
+        const int x = static_cast<int>(a1 & 0x1FFu);
+        if (px >= x && px < x + 64)
+            bus_write_u16(at, static_cast<uint16_t>(kRest - kRaise));
+    }
+}
