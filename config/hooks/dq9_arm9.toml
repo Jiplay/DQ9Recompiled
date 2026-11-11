@@ -382,3 +382,17 @@ registers = ["r0"]
 address = 0x0203BE04      # ldr r0, =0x021056B4 (before the B shadow copy)
 mode = "arm"
 name = "Dq9NamesHoverUpload"
+
+# Instant text (B prints the whole box). The message manager's step
+# _sub_020444E4_0 (0x020444E4, body 0x02065xxx) prints text each frame: R4 is
+# the speed (0x10 = one character per frame, 0x18 fast), the accumulator at
+# mgr+0x80 gains R4 * 16 (4-bit fraction) and R9 = the whole characters to
+# print this frame, run by the loop at 0x02065EE8 (mgr+0x78 = next character,
+# mgr+0x6C = length). The loop already stops at the end of the text and at
+# every page-break / wait / choice code, so a huge R4 prints up to the next
+# stop. Handler: src/hooks/text_instant.cpp.
+[[hook]]
+address = 0x02065D14      # add r2, r3, r4, lsl #4 (r4 = characters per frame)
+mode = "arm"
+name = "Dq9TextInstant"
+registers = ["r4"]
