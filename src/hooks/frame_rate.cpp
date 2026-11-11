@@ -24,6 +24,24 @@
 // its hardware clock (nds_title_set_arm9_overclock), which holds 60 in towns
 // too; timers, sound and the ARM7 keep the hardware's timing. 30 FPS puts
 // the hardware clock back.
+//
+// While a dialogue box is open the loop also reads the cartridge on every
+// pass (the polling read at 0x020D0BF8: about three quarters of the ARM9's
+// time went there, and the rate fell to 30). The card is not on the ARM9's
+// clock, so 60 FPS makes its transfers 16 times as fast as well
+// (nds_title_set_card_speedup).
+//
+// Twice the passes is about twice the host work: a town took 16 ms of the
+// 16.7 ms frame on an i7-13650HX and a dialogue box 17.7, so the host fell
+// to 52 fps. 60 FPS therefore also lets the scheduler run the ARM9 in longer
+// stretches while the ARM7 sleeps (nds_title_set_event_windows), which cuts
+// the cost of each frame.
+//
+// While the text of a 2D message window is appearing, the game redoes the
+// whole window on every pass, which at 60 FPS still cost about 2 ms a frame
+// on that host. Dq9TextWindowHalfRate skips that redraw on every other pass
+// of the main loop, so the window is redrawn 30 times a second as in the
+// original while 3D stays at 60.
 #include "title_hooks.h"
 #include "title_settings.h"
 
@@ -43,12 +61,36 @@ constexpr NdsTitleSetting kFrameRate = {
 
 const int kFrameRateId = nds_title_setting_register(&kFrameRate);
 
+bool Fast() { return nds_title_setting_value(kFrameRateId) != 0; }
+
+// The return address of the main loop's call of 0x020439C0 (ov17
+// 0x0218C910): the other callers run their own loops.
+constexpr uint32_t kMainLoopTextDraw = 0x0218C914u;
+
+// The last main-loop pass skipped the 2D window's redraw.
+bool g_text_window_skipped = false;
+
 }  // namespace
 
 // Before `b 0x0218C798` at 0x0218C78C: r0 = VBlanks since the last pass,
 // r7 = 2 - r0 = the loop's bound (it waits while 1 <= i < r7).
 NDS_TITLE_HOOK void Dq9FrameRate(uint32_t* r0, uint32_t* r7) {
-    const bool fast = nds_title_setting_value(kFrameRateId) != 0;
+    const bool fast = Fast();
     nds_title_set_arm9_overclock(fast ? 2 : 1);
+    nds_title_set_card_speedup(fast ? 16 : 1);
+    nds_title_set_event_windows(fast);
     if (fast) *r7 = 1u - *r0;
+}
+
+// Before `beq 0x02043E94` at 0x020439DC: r2 != 0 while the 2D message window
+// is up, lr = the caller. True takes the branch past the window's redraw.
+// Never two passes in a row, so the window is at most one pass (16 ms) late.
+NDS_TITLE_HOOK bool Dq9TextWindowHalfRate(uint32_t* r2, uint32_t* lr) {
+    if (!Fast() || *r2 == 0u || *lr != kMainLoopTextDraw ||
+        g_text_window_skipped) {
+        g_text_window_skipped = false;
+        return false;
+    }
+    g_text_window_skipped = true;
+    return true;
 }

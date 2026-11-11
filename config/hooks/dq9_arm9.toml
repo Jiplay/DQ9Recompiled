@@ -396,3 +396,22 @@ address = 0x02065D14      # add r2, r3, r4, lsl #4 (r4 = characters per frame)
 mode = "arm"
 name = "Dq9TextInstant"
 registers = ["r4"]
+
+# 3D frame rate, part 2: the 2D message window. 0x020439C0(mgr, flag), once
+# per pass of the main loop (ov17 0x0218C910), redoes the window while its
+# text is appearing: lays the whole text out again (0x02066D00), draws the
+# frame and uploads the 18 KB tile buffer.
+#   0x020439D0  ldrb r2, [r2, #0x9CC]   ; mgr + 0x19CC: the 2D window is up
+#   0x020439D8  cmp  r2, #0
+#   0x020439DC  beq  0x02043E94         ; past the 2D block
+# At 60 FPS that is twice the original's work per second, so the hook takes
+# the branch on every other pass: the window is redrawn 30 times a second,
+# as in the original. Handler: src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x020439DC      # beq 0x02043E94 (r2 = 2D window up, lr = caller)
+mode = "arm"
+name = "Dq9TextWindowHalfRate"
+registers = ["r2", "lr"]
+on_true = "jump"
+jump_address = 0x02043E94
+on_false = "continue"
