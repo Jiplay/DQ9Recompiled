@@ -432,12 +432,12 @@ NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
 NDS_TITLE_HOOK void Dq9NamesHoverUpload() {
     constexpr uint32_t kShadowB = 0x021056B4u;
     // The sprite is 64x64: 16 rows are on screen at rest, the character's
-    // status is in the rows below the edge. Hovering raises it.
+    // status is in the rows below the edge. Hovering raises it, eased over a
+    // few frames (this runs once per frame): offset[slot] goes from 0 to
+    // kNameRaise and back, slot = sprite x / 64.
+    static int offset[4] = {0, 0, 0, 0};
     int px = 0, py = 0;
-    if (!nds_title_top_pointer(&px, &py)) {
-        g_raised_x = -1;
-        return;
-    }
+    const bool over = nds_title_top_pointer(&px, &py);
     int hot_x = -1;
     for (uint32_t i = 0; i < 128; ++i) {
         const uint32_t at = kShadowB + 8u * i;
@@ -445,13 +445,17 @@ NDS_TITLE_HOOK void Dq9NamesHoverUpload() {
         if ((a0 & 0xFF00u) != 0 || (a1 & 0xC000u) != 0xC000u) continue;
         if (static_cast<int>(a0 & 0xFFu) != kNameRest) continue;
         const int x = static_cast<int>(a1 & 0x1FFu);
-        if (px < x || px >= x + 64) continue;
-        // Once raised, the sprite covers y (rest - raise)..191: stay up while
-        // the pointer is on it, or it would drop as soon as it rises.
-        const int top = (x == g_raised_x) ? kNameRest - kNameRaise : kRowTop;
-        if (py < top) continue;
-        bus_write_u16(at, static_cast<uint16_t>(kNameRest - kNameRaise));
-        hot_x = x;
+        const int slot = x / 64 & 3;
+        // Once raised, the sprite covers y (rest - offset)..191: stay hot
+        // while the pointer is on it, or it would drop as it rises.
+        const int top = offset[slot] > 0 ? kNameRest - offset[slot] : kRowTop;
+        const bool hot = over && px >= x && px < x + 64 && py >= top;
+        const int target = hot ? kNameRaise : 0;
+        const int diff = target - offset[slot];
+        if (diff != 0) offset[slot] += diff > 0 ? (diff + 2) / 3 : (diff - 2) / 3;
+        if (hot) hot_x = x;
+        if (offset[slot] > 0)
+            bus_write_u16(at, static_cast<uint16_t>(kNameRest - offset[slot]));
     }
     g_raised_x = hot_x;
 }
