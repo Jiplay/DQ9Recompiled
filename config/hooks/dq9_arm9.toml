@@ -529,3 +529,16 @@ name = "Dq9AnalogMovement"
 registers = ["r2", "r6"]
 on_true = "jump"
 jump_address = 0x02038490 # mvn r0, #0 ; strb r0, [r4, #0x255] ; walk at r6
+
+# The top screen's field map can be dragged with the mouse, like an image on
+# a phone. 0x02024528(map) (mode 0 of the top-screen step 0x020235D8) works
+# out the map's centre in map pixels from its own player-following centre
+# (map+1452/+1456) and stores it at map+68/+72, from which the map pieces,
+# the BG's fine scroll (0x02027448), the icons and the party markers are all
+# placed. The hook adds the drag's offset to it before the store. Handler:
+# Dq9TopMapPan in src/hooks/mouse_menus.cpp.
+[[hook]]
+address = 0x02024794      # str r5, [r4, #0x44] (r5 / r6 = centre x / y)
+mode = "arm"
+name = "Dq9TopMapPan"
+registers = ["r4", "r5", "r6", "sp"]

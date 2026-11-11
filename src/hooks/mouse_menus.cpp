@@ -12,6 +12,7 @@
 // 5), the name keyboard (part 7, dq9_arm9_ov003.toml) and the equipment page
 // (part 8, dq9_arm9_ov005.toml).
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -590,6 +591,195 @@ NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
     *kind = 3u;
     *slot = static_cast<uint32_t>(members[hit]);
     return true;
+}
+
+// ---- Top-screen map: drag to scroll ------------------------------------------
+// The field map on the top screen (mode 0 of the top-screen step 0x020235D8,
+// drawn by 0x02024528(map)) follows the player: map+1452/+1456 is its centre
+// in world units, moved only when the player walks out of a dead zone, and
+// from it the step works out the centre in map pixels, stored at map+68/+72.
+// Everything shown is placed from those two: the map pieces (8x8 tiles stamped
+// into engine B's BG0 around it), the BG's fine scroll (0x02027448), the icons
+// and the party markers (screen point (128, 96) is the centre). The hook, where
+// the step stores them, adds an offset the mouse drags, as an image on a
+// phone: it follows the pointer while the left button is held after a press
+// on the map, keeps the release's speed for a moment, stops at the map's
+// edges, and eases back to the game's own centre once the player walks.
+namespace {
+
+constexpr uint32_t kMapZoom = 56;              // fx32 world -> map scale
+constexpr uint32_t kMapOriginX = 24, kMapOriginY = 28;  // s32, in tiles
+constexpr uint32_t kMapPieces = 32, kMapPieceCount = 36;  // 36-byte entries
+constexpr uint32_t kMapPlaced = 44, kMapPlacedCount = 48; // 16-byte entries
+constexpr uint32_t kMapGrottoLayout = 108;     // non-zero: a 32x32 map
+// 0x0201B5C0: map ids 0x9C41..0x9CA0 draw one 32x32-tile map at the origin
+// (when map+108 is set; probably the grottos), the others draw the placed
+// pieces.
+constexpr int kGrottoFirst = 0x9C41, kGrottoLast = 0x9C41 + 95;
+// Where the centre is on screen, and the map's visible rows (the name tabs
+// cover it from y 176).
+constexpr int kMapCentreX = 128, kMapCentreY = 96, kMapBottom = 176;
+
+struct MapPan {
+    float x = 0.0f, y = 0.0f;    // offset of the shown centre, map pixels
+    float vx = 0.0f, vy = 0.0f;  // per frame, after a release
+    bool dragging = false;       // a drag that started on the map
+    bool ignored = false;        // a drag that started elsewhere
+    int last_x = 0, last_y = 0;
+    uint32_t key[6] = {};        // the map shown (a change resets the pan)
+    uint32_t player_x = 0, player_z = 0;
+    std::chrono::steady_clock::time_point seen;
+};
+MapPan g_pan;
+
+// The map's extent in map pixels (the centre's space): the union of what
+// 0x02024528 stamps. False if it draws nothing.
+bool MapBounds(uint32_t map, bool grotto, int* l, int* t, int* r, int* b) {
+    const int ox = static_cast<int>(bus_read_u32(map + kMapOriginX));
+    const int oy = static_cast<int>(bus_read_u32(map + kMapOriginY));
+    if (grotto) {
+        if (bus_read_u32(map + kMapGrottoLayout) == 0) return false;
+        *l = 8 * ox;
+        *t = 8 * oy;
+        *r = *l + 256;
+        *b = *t + 256;
+        return true;
+    }
+    bool any = false;
+    const uint32_t placed = bus_read_u32(map + kMapPlaced);
+    const int count = static_cast<int>(bus_read_u32(map + kMapPlacedCount));
+    const int pieces = static_cast<int>(bus_read_u32(map + kMapPieceCount));
+    for (int i = 0; i < count && i < 256; ++i) {
+        const uint32_t e = placed + 16u * static_cast<uint32_t>(i);
+        const int id = static_cast<int>(bus_read_u32(e + 4u));
+        if (id < 0 || id >= pieces) continue;  // as 0x02027888
+        const uint32_t piece =
+            bus_read_u32(map + kMapPieces) + 36u * static_cast<uint32_t>(id);
+        const int x0 = 8 * (ox + static_cast<int>(bus_read_u32(e + 8u)));
+        const int y0 = 8 * (oy + static_cast<int>(bus_read_u32(e + 12u)));
+        const int x1 = x0 + 8 * bus_read_u8(piece + 8u);
+        const int y1 = y0 + 8 * bus_read_u8(piece + 9u);
+        if (!any || x0 < *l) *l = x0;
+        if (!any || y0 < *t) *t = y0;
+        if (!any || x1 > *r) *r = x1;
+        if (!any || y1 > *b) *b = y1;
+        any = true;
+    }
+    return any;
+}
+
+// The shown centre may go as far as puts the map's edge at the screen's edge
+// (or stays in the middle of a map smaller than the screen), and always
+// where the game itself puts it.
+float ClampAxis(float pan, int game, int lo_edge, int hi_edge, int before,
+                int after, float* vel) {
+    int lo = lo_edge + before, hi = hi_edge - after;
+    if (lo > hi) lo = hi = (lo + hi) / 2;
+    if (game < lo) lo = game;
+    if (game > hi) hi = game;
+    const float shown = static_cast<float>(game) + pan;
+    if (shown < static_cast<float>(lo)) {
+        *vel = 0.0f;
+        return static_cast<float>(lo - game);
+    }
+    if (shown > static_cast<float>(hi)) {
+        *vel = 0.0f;
+        return static_cast<float>(hi - game);
+    }
+    return pan;
+}
+
+}  // namespace
+
+// At 0x02024794 (str r5, [r4, #0x44]) in 0x02024528, the field map's step:
+// r4 = map, r5 / r6 = the centre in map pixels, sp = the step's frame (sp+0x18
+// the map id, sp+0x58 / sp+0x60 the player's world x / z).
+NDS_TITLE_HOOK void Dq9TopMapPan(uint32_t* map_reg, uint32_t* cx, uint32_t* cy,
+                                 uint32_t* sp) {
+    const uint32_t map = *map_reg;
+    const int game_x = static_cast<int>(*cx), game_y = static_cast<int>(*cy);
+    const int id = static_cast<int>(bus_read_u32(*sp + 0x18u));
+    const bool grotto = id >= kGrottoFirst && id <= kGrottoLast;
+    MapPan& p = g_pan;
+
+    // A new map, zoom or layout, or the map not shown for a while: start
+    // again from the game's centre.
+    const uint32_t key[6] = {bus_read_u32(map + kMapZoom),
+                             bus_read_u32(map + kMapOriginX),
+                             bus_read_u32(map + kMapOriginY),
+                             bus_read_u32(map + kMapPlaced),
+                             bus_read_u32(map + kMapPlacedCount),
+                             static_cast<uint32_t>(id)};
+    const auto now = std::chrono::steady_clock::now();
+    if (std::memcmp(key, p.key, sizeof key) != 0 ||
+        now - p.seen > std::chrono::milliseconds(500)) {
+        std::memcpy(p.key, key, sizeof key);
+        p.x = p.y = p.vx = p.vy = 0.0f;
+    }
+    p.seen = now;
+
+    int dx = 0, dy = 0;
+    if (nds_title_top_drag(&dx, &dy)) {
+        if (!p.dragging && !p.ignored) {
+            // Only a press on the map itself: not on the name tabs (the row,
+            // or a raised tab, which a click opens).
+            const bool on_tab = dy >= kRowTop ||
+                                (g_raised_x >= 0 && dx >= g_raised_x &&
+                                 dx < g_raised_x + kTabWidth &&
+                                 dy >= g_raised_top);
+            p.dragging = !on_tab && dx >= 0 && dx < 256 && dy >= 0;
+            p.ignored = !p.dragging;
+            p.last_x = dx;
+            p.last_y = dy;
+            p.vx = p.vy = 0.0f;
+        }
+        if (p.dragging) {
+            // The map moves with the pointer: the centre the other way.
+            const float mx = static_cast<float>(p.last_x - dx);
+            const float my = static_cast<float>(p.last_y - dy);
+            p.x += mx;
+            p.y += my;
+            p.vx = 0.5f * p.vx + 0.5f * mx;
+            p.vy = 0.5f * p.vy + 0.5f * my;
+            p.last_x = dx;
+            p.last_y = dy;
+        }
+    } else {
+        p.dragging = p.ignored = false;
+    }
+
+    // The player walking takes the map back to the game's centre.
+    const uint32_t px = bus_read_u32(*sp + 0x58u), pz = bus_read_u32(*sp + 0x60u);
+    const bool walking = px != p.player_x || pz != p.player_z;
+    p.player_x = px;
+    p.player_z = pz;
+    if (!p.dragging) {
+        if (walking) {
+            p.vx = p.vy = 0.0f;
+            p.x *= 0.85f;
+            p.y *= 0.85f;
+            if (std::fabs(p.x) < 0.5f) p.x = 0.0f;
+            if (std::fabs(p.y) < 0.5f) p.y = 0.0f;
+        } else {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx *= 0.9f;
+            p.vy *= 0.9f;
+            if (std::fabs(p.vx) < 0.1f) p.vx = 0.0f;
+            if (std::fabs(p.vy) < 0.1f) p.vy = 0.0f;
+        }
+    }
+
+    int l = 0, t = 0, r = 0, b = 0;
+    if (!MapBounds(map, grotto, &l, &t, &r, &b)) {
+        p.x = p.y = p.vx = p.vy = 0.0f;
+        return;
+    }
+    p.x = ClampAxis(p.x, game_x, l, r, kMapCentreX, 256 - kMapCentreX, &p.vx);
+    p.y = ClampAxis(p.y, game_y, t, b, kMapCentreY, kMapBottom - kMapCentreY,
+                    &p.vy);
+    *cx = static_cast<uint32_t>(game_x + static_cast<int>(std::lround(p.x)));
+    *cy = static_cast<uint32_t>(game_y + static_cast<int>(std::lround(p.y)));
 }
 
 // ---- Top-screen click advances the message box --------------------------------
