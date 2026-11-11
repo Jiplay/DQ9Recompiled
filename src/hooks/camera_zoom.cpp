@@ -1,7 +1,10 @@
 // Camera distance: moves DQ9's scene camera closer to or farther from what
-// it looks at, by the percentage set in the runtime menu (Game > Camera
-// distance, [title] camera_distance in settings.toml). 100% leaves the game
-// untouched. See config/hooks/dq9_arm9.toml for the guest code.
+// it looks at. Game > Camera zoom picks Auto or Manual ([title] camera_mode
+// in settings.toml). Manual uses the percentage in Game > Manual camera
+// distance ([title] camera_distance, saved in any mode), which the mouse
+// wheel and the gamepad's right stick (up/down) change while Manual is on.
+// 100% leaves the game untouched. See config/hooks/dq9_arm9.toml for the
+// guest code.
 //
 // Auto (the default) follows the window: the distance grows with the height
 // the main screen is shown at, so the characters keep the size they have in
@@ -31,25 +34,39 @@
 
 namespace {
 
-// Auto is 0: a fixed distance is never 0%.
 constexpr int kAuto = 0;
-constexpr const char* kChoices[] = {"Auto", "100%", "125%", "150%",
-                                    "175%", "200%", "250%", "300%",
-                                    "400%"};
-constexpr int kValues[] = {kAuto, 100, 125, 150, 175, 200, 250, 300, 400};
+constexpr int kManual = 1;
+constexpr const char* kModeChoices[] = {"Auto", "Manual"};
+constexpr int kModeValues[] = {kAuto, kManual};
 
-constexpr NdsTitleSetting kCameraDistance = {
-    "camera_distance",
-    "Camera distance",
-    "How far the camera sits from what it looks at. Above 100% zooms out "
-    "and shows more around you. Auto follows the window "
-    "size: characters keep their size and a bigger window shows more.",
-    100, 400, 25,
-    kChoices, sizeof(kChoices) / sizeof(kChoices[0]), kValues,
+constexpr NdsTitleSetting kCameraMode = {
+    "camera_mode",
+    "Camera zoom",
+    "Auto follows the window size: characters keep their size and a bigger "
+    "window shows more. Manual uses the distance below, which the mouse "
+    "wheel and the gamepad's right stick (up/down) change.",
+    0, 1, 1,
+    kModeChoices, sizeof(kModeChoices) / sizeof(kModeChoices[0]), kModeValues,
     kAuto,
 };
 
+// Only used in Manual mode, but always kept (and saved).
+constexpr NdsTitleSetting kCameraDistance = {
+    "camera_distance",
+    "Manual camera distance",
+    "How far the camera sits from what it looks at, in Manual zoom mode. "
+    "Above 100% zooms out and shows more around you. Not in the menu.",
+    1000, 4000, 1,  // thousandths of the game's own distance
+    nullptr, 0, nullptr,
+    1000,
+    true,  // hidden: the mouse wheel and the right stick change it
+};
+
+const int kCameraModeId = nds_title_setting_register(&kCameraMode);
 const int kCameraDistanceId = nds_title_setting_register(&kCameraDistance);
+const bool kZoomBound = (nds_title_set_zoom_binding(kCameraDistanceId,
+                                                    kCameraModeId, kManual),
+                         true);
 
 // Auto: 100% when the main screen is shown 2x (the default window), and
 // proportional to its height, within the fixed choices' range.
@@ -79,8 +96,8 @@ int CameraDistancePermille() {
 
 int RawCameraDistancePermille() {
     if (dq9::FullScreenPage()) return 1000;
-    const int value = nds_title_setting_value(kCameraDistanceId);
-    if (value != kAuto) return std::max(value, 100) * 10;
+    if (nds_title_setting_value(kCameraModeId) == kManual)
+        return std::max(nds_title_setting_value(kCameraDistanceId), 1000);
     const int points = nds_title_display_height();
     if (points <= 0) return 1000;
     const int permille = static_cast<int>(

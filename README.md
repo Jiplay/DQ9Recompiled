@@ -93,8 +93,11 @@ Shipped hooks:
   paths it takes after a soft reset. Off leaves the game untouched. The game proper starts about 0.9e9 guest cycles
   sooner, plus the whole movie.
 - **Camera distance** (`camera_zoom.cpp`; `dq9_arm9.toml`): the runtime
-  menu's Game > Camera distance, Auto or 50% to 400% (`[title]
-  camera_distance` in `settings.toml`, 0 for Auto). Moves the scene camera
+  menu's Game > Camera zoom, Auto or Manual (`[title] camera_mode`, 0 Auto,
+  1 Manual). Manual uses Game > Manual camera distance, 100% to 400%, not listed in the menu (`[title]
+  camera_distance`, in thousandths: 1000 to 4000, saved in either mode), which the mouse wheel and the
+  gamepad's right stick (up/down, while the virtual stylus is not held) raise
+  and lower, in Manual only. Moves the scene camera
   along its line of sight before the game builds the view matrix, so it
   applies to the field, battles and cutscenes alike. 100% leaves the game
   untouched. Auto (the default) follows the window: the distance is 100% when
