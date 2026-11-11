@@ -421,6 +421,22 @@ on_true = "jump"
 jump_address = 0x02043E94
 on_false = "continue"
 
+# Part 3: while a choice list is up the block must run on every pass (it places
+# the hand cursor sprite), so on every other such pass only the tile upload is
+# skipped (18 requests through 0x020DC0F0, the costly part):
+#   0x02043C24  ldr  r3, [r10, #0x34]   ; the tile buffer's descriptor
+#   0x02043C28  cmp  r3, #0
+#   0x02043C2C  beq  0x02043C98         ; past the upload loop
+# The pass is chosen by Dq9TextWindowHalfRate. Handler: src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x02043C2C      # beq 0x02043C98 (r3 = tile buffer descriptor)
+mode = "arm"
+name = "Dq9TextWindowSkipUpload"
+registers = ["r3"]
+on_true = "jump"
+jump_address = 0x02043C98
+on_false = "continue"
+
 # Right click = the message box's "next" key, like B (0x403 = A/B/X in the
 # check at 0x020440DC, which sets r5 = 1). The hook runs after the second key
 # test, before `cmp r0, #0` at 0x02044168. Handler: Dq9TextAdvanceRightClick

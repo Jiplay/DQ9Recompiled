@@ -74,8 +74,11 @@ constexpr uint32_t kWindowState = 0x9A0u;
 constexpr uint32_t kChoiceState = 6u;
 constexpr uint32_t kChoiceShown = 0x19BAu;
 
-// The last main-loop pass skipped the 2D window's redraw.
+// The last main-loop pass skipped the 2D window's redraw (or, with a choice
+// list up, its tile upload).
 bool g_text_window_skipped = false;
+// This call of 0x020439C0 runs the block but skips the tile upload.
+bool g_skip_tile_upload = false;
 
 }  // namespace
 
@@ -92,18 +95,33 @@ NDS_TITLE_HOOK void Dq9FrameRate(uint32_t* r0, uint32_t* r7) {
 // Before `beq 0x02043E94` at 0x020439DC: r2 != 0 while the 2D message window
 // is up, r10 = the window manager, lr = the caller. True takes the branch past
 // the window's redraw. Never two passes in a row, so the window is at most one
-// pass (16 ms) late. While a choice list is shown the window is redrawn on
-// every pass: the hand cursor (a sprite) is placed by that redraw, and
-// skipping it made the cursor vanish on every other frame.
+// pass (16 ms) late. While a choice list is shown the block runs on every
+// pass, since it places the hand cursor (a sprite) and skipping it made the
+// cursor vanish on every other frame; on those passes only the tile upload is
+// skipped (Dq9TextWindowSkipUpload).
 NDS_TITLE_HOOK bool Dq9TextWindowHalfRate(uint32_t* r2, uint32_t* r10,
                                           uint32_t* lr) {
+    g_skip_tile_upload = false;
     if (*lr != kMainLoopTextDraw) return false;
-    const bool choice = bus_read_u32(*r10 + kWindowState) == kChoiceState &&
-                        bus_read_u8(*r10 + kChoiceShown) != 0u;
-    if (!Fast() || *r2 == 0u || choice || g_text_window_skipped) {
+    if (!Fast() || *r2 == 0u || g_text_window_skipped) {
         g_text_window_skipped = false;
         return false;
     }
     g_text_window_skipped = true;
+    const bool choice = bus_read_u32(*r10 + kWindowState) == kChoiceState &&
+                        bus_read_u8(*r10 + kChoiceShown) != 0u;
+    if (choice) {
+        g_skip_tile_upload = true;
+        return false;
+    }
     return true;
+}
+
+// Before `beq 0x02043C98` at 0x02043C2C, later in the same call: r3 = the
+// tile buffer's descriptor (0 = none). True takes the branch past the upload;
+// VRAM keeps the last pass's tiles.
+NDS_TITLE_HOOK bool Dq9TextWindowSkipUpload(uint32_t* r3) {
+    const bool skip = g_skip_tile_upload && *r3 != 0u;
+    g_skip_tile_upload = false;
+    return skip;
 }
