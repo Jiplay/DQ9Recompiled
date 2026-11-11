@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Checks res/lang/*.toml: key parity with English, empty values, keys the
 hooks use (Tr("section", "key", ...)) that English lacks, and keys nothing
-uses."""
+uses ([options] aside: its keys are built at run time from the runtime
+menu's rows)."""
 import re
 import sys
 import tomllib
@@ -46,7 +47,8 @@ for path in (root / "src").rglob("*"):
 for key in sorted(used - en_flat.keys()):
     report(f"en: used but missing [{key[0]}] {key[1]}")
 for key in sorted(en_flat.keys() - used):
-    report(f"unused [{key[0]}] {key[1]}")
+    if key[0] != "options":
+        report(f"unused [{key[0]}] {key[1]}")
 
 print(f"{problems} problem(s)" if problems else "ok")
 sys.exit(1 if problems else 0)

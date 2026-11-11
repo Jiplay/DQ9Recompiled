@@ -141,7 +141,17 @@ Shipped hooks:
 - **Options row** (`options_row.cpp`; `dq9_arm9_ov004.toml`): the main
   menu's "Configure Nintendo Wi-Fi Connection Settings" row (the service
   is gone) becomes "Options", without the WFC icon, in the language the
-  game shows its text in. Choosing it does nothing yet. Always on.
+  game shows its text in. Choosing it opens the runtime menu's settings as
+  pages of the title menu itself: the categories (Display, Audio, Input,
+  Game), then one row per option, with its description in a panel at the
+  bottom of the screen. A steps a value forward, left and right step it
+  down and up, B goes back. The rows and values are the runtime menu's,
+  so both menus stay in sync; the text is in `res/lang/*.toml`
+  `[options]`. The pages are made of the title scene's own cells, grid
+  and panels: the hook on the row's handler calls the game's functions
+  for them, and returns through the game's script to rebuild the main
+  menu. The title does not go back to the logos while a page is open.
+  Netplay, Resume and Quit stay in the runtime menu. Always on.
 - **Local wireless diagnostics** (`local_wireless_diag.cpp`;
   `dq9_arm7.toml`): log only. Prints a `[dq9-wm]` line to stderr when DQ9's
   ARM7 Wi-Fi code drops an MP link on its own (with the WM reason code) and

@@ -18,8 +18,7 @@
 # 0x0216AFB0 sets up an entry cell with 0x021F89F4: +0x34 the layer (210),
 # +0x38 the text id, looked up in string table 0x192 when +0x20 (a string
 # pointer, 0 here) is null (draw: ov23 0x021F8240). The hook gives the WFC
-# row its own string instead. Its action becomes 0, so choosing the row
-# does nothing for now.
+# row its own string instead.
 version = 1
 
 [program]
@@ -52,39 +51,18 @@ mode = "arm"
 name = "Dq9OptionsRowHideIcon"
 registers = ["cpsr"]
 
-# The action: r1 = 10 for the vtable +0x44 / +0x7C calls on the row.
+# The row keeps the WFC row's action, 10: the grid step runs handler 10 of
+# the scene's table (ov4 0x0217018C), 0x0216D6A0, which started the Nintendo
+# WFC setup (main-loop mode 8, script label 999). The hook at its entry
+# replaces it with the options pages: it either returns 0 to the caller or
+# jumps to the `bx r12` of a veneer at 0x0216FA40 to call a guest function,
+# with lr = 0x0216D6A0 so the call returns to the hook. The pages' own rows
+# and their grid's B / left / right handlers are also handler 10.
 [[hook]]
-address = 0x0216C9D0      # mode 1, cell 52, blx +0x44
+address = 0x0216D6A0      # push {r3, r4, r5, lr} (handler 10, r0 = scene)
 mode = "arm"
-name = "Dq9OptionsRowAction"
-registers = ["r1"]
-
-[[hook]]
-address = 0x0216C9E4      # mode 1, cell 52, blx +0x7C
-mode = "arm"
-name = "Dq9OptionsRowAction"
-registers = ["r1"]
-
-[[hook]]
-address = 0x0216CB28      # mode 2, cell 51, blx +0x44
-mode = "arm"
-name = "Dq9OptionsRowAction"
-registers = ["r1"]
-
-[[hook]]
-address = 0x0216CB3C      # mode 2, cell 51, blx +0x7C
-mode = "arm"
-name = "Dq9OptionsRowAction"
-registers = ["r1"]
-
-[[hook]]
-address = 0x0216CCE8      # mode 5, cell 52, blx +0x44
-mode = "arm"
-name = "Dq9OptionsRowAction"
-registers = ["r1"]
-
-[[hook]]
-address = 0x0216CCFC      # mode 5, cell 52, blx +0x7C
-mode = "arm"
-name = "Dq9OptionsRowAction"
-registers = ["r1"]
+name = "Dq9OptionsMenu"
+registers = ["r0", "r1", "r2", "r3", "r12", "sp", "lr"]
+on_true = "jump"
+jump_address = 0x0216FA40 # bx r12
+on_false = "return"
