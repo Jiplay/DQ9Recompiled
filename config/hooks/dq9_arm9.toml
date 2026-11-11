@@ -413,10 +413,10 @@ registers = ["r4"]
 # the branch on every other pass: the window is redrawn 30 times a second,
 # as in the original. Handler: src/hooks/frame_rate.cpp.
 [[hook]]
-address = 0x020439DC      # beq 0x02043E94 (r2 = 2D window up, lr = caller)
+address = 0x020439DC      # beq 0x02043E94 (r2 = 2D window up, r10 = manager, lr = caller)
 mode = "arm"
 name = "Dq9TextWindowHalfRate"
-registers = ["r2", "lr"]
+registers = ["r2", "r10", "lr"]
 on_true = "jump"
 jump_address = 0x02043E94
 on_false = "continue"

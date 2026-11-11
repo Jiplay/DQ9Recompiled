@@ -41,7 +41,7 @@
 // whole window on every pass, which at 60 FPS still cost about 2 ms a frame
 // on that host. Dq9TextWindowHalfRate skips that redraw on every other pass
 // of the main loop, so the window is redrawn 30 times a second as in the
-// original while 3D stays at 60.
+// original while 3D stays at 60 (except while a choice list is shown).
 #include "title_hooks.h"
 #include "title_settings.h"
 
@@ -67,6 +67,13 @@ bool Fast() { return nds_title_setting_value(kFrameRateId) != 0; }
 // 0x0218C910): the other callers run their own loops.
 constexpr uint32_t kMainLoopTextDraw = 0x0218C914u;
 
+// The window manager's choice list: 0x02044540 (called from the redraw,
+// 0x02066D00) draws it and its hand cursor when the state at +0x9A0 is 6 and
+// the byte at +0x19BA is set.
+constexpr uint32_t kWindowState = 0x9A0u;
+constexpr uint32_t kChoiceState = 6u;
+constexpr uint32_t kChoiceShown = 0x19BAu;
+
 // The last main-loop pass skipped the 2D window's redraw.
 bool g_text_window_skipped = false;
 
@@ -83,11 +90,17 @@ NDS_TITLE_HOOK void Dq9FrameRate(uint32_t* r0, uint32_t* r7) {
 }
 
 // Before `beq 0x02043E94` at 0x020439DC: r2 != 0 while the 2D message window
-// is up, lr = the caller. True takes the branch past the window's redraw.
-// Never two passes in a row, so the window is at most one pass (16 ms) late.
-NDS_TITLE_HOOK bool Dq9TextWindowHalfRate(uint32_t* r2, uint32_t* lr) {
-    if (!Fast() || *r2 == 0u || *lr != kMainLoopTextDraw ||
-        g_text_window_skipped) {
+// is up, r10 = the window manager, lr = the caller. True takes the branch past
+// the window's redraw. Never two passes in a row, so the window is at most one
+// pass (16 ms) late. While a choice list is shown the window is redrawn on
+// every pass: the hand cursor (a sprite) is placed by that redraw, and
+// skipping it made the cursor vanish on every other frame.
+NDS_TITLE_HOOK bool Dq9TextWindowHalfRate(uint32_t* r2, uint32_t* r10,
+                                          uint32_t* lr) {
+    if (*lr != kMainLoopTextDraw) return false;
+    const bool choice = bus_read_u32(*r10 + kWindowState) == kChoiceState &&
+                        bus_read_u8(*r10 + kChoiceShown) != 0u;
+    if (!Fast() || *r2 == 0u || choice || g_text_window_skipped) {
         g_text_window_skipped = false;
         return false;
     }
