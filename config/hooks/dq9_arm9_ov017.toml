@@ -26,11 +26,22 @@ name = "Dq9InteractPrompt"
 [[hook]]
 address = 0x021AED10      # bl 0x020473D8 (r0 = sprite)
 mode = "arm"
-name = "Dq9WorldIconBegin"
-registers = ["r0"]
+name = "Dq9HarvestIconBegin"
+registers = ["r0", "r4"]
 
 [[hook]]
 address = 0x021AED14      # after the draw
+mode = "arm"
+name = "Dq9WorldIconEnd"
+
+[[hook]]
+address = 0x021AEDD4      # bl 0x020473D8 (r0 = sprite; fade-out state)
+mode = "arm"
+name = "Dq9HarvestIconBegin"
+registers = ["r0", "r4"]
+
+[[hook]]
+address = 0x021AEDD8      # after the draw
 mode = "arm"
 name = "Dq9WorldIconEnd"
 

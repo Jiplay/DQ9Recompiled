@@ -162,25 +162,71 @@ NDS_TITLE_HOOK void Dq9InteractPrompt() {
 // sprite's position minus (12, 40) px at +0x1C / +0x20 (fx32) and draws it
 // with 0x020473D8, which pushes and pops by itself. Begin (before that call,
 // r0 = the sprite) pushes the position matrix and scales about the sprite's
-// own anchor point (+12, +40 px), so it stays on its point; End (right after) pops. Both are
-// always sent, so they pair.
-NDS_TITLE_HOOK void Dq9WorldIconBegin(uint32_t* sprite) {
+// own anchor point (+12, +40 px), so it stays on its point; End (right after)
+// pops. Both are always sent, so they pair.
+namespace {
+
+// Pushes the position matrix, then moves it by dy (fx32 px, y) and scales it
+// by the UI scale about the sprite's anchor point.
+void WorldIconPush(uint32_t sprite, int64_t dy) {
     bus_write_u32(kMtxPush, 0);
     const int32_t k = TextBoxScale();
-    if (k >= kOne) return;
+    if (k >= kOne && dy == 0) return;
     // The stored position is the projected point minus (12, 40) px (its top
     // left corner): scale about the point itself, so the icon keeps sitting on
     // its spot instead of drifting towards its corner.
     const int64_t ax =
-        static_cast<int32_t>(bus_read_u32(*sprite + 0x1C)) + (12 << 12);
+        static_cast<int32_t>(bus_read_u32(sprite + 0x1C)) + (12 << 12);
     const int64_t ay =
-        static_cast<int32_t>(bus_read_u32(*sprite + 0x20)) + (40 << 12);
-    bus_write_u32(kMtxTrans, static_cast<uint32_t>(ax * (kOne - k) / kOne));
-    bus_write_u32(kMtxTrans, static_cast<uint32_t>(ay * (kOne - k) / kOne));
+        static_cast<int32_t>(bus_read_u32(sprite + 0x20)) + (40 << 12);
+    const int64_t m = k < kOne ? k : kOne;
+    bus_write_u32(kMtxTrans, static_cast<uint32_t>(ax * (kOne - m) / kOne));
+    bus_write_u32(kMtxTrans,
+                  static_cast<uint32_t>(ay * (kOne - m) / kOne + dy));
     bus_write_u32(kMtxTrans, 0);
-    bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
-    bus_write_u32(kMtxScale, static_cast<uint32_t>(k));
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(m));
+    bus_write_u32(kMtxScale, static_cast<uint32_t>(m));
     bus_write_u32(kMtxScale, static_cast<uint32_t>(kOne));
+}
+
+}  // namespace
+
+NDS_TITLE_HOOK void Dq9WorldIconBegin(uint32_t* sprite) {
+    WorldIconPush(*sprite, 0);
+}
+
+// The harvest spot's sprite (the state machine at ov17 0x021AE85C, obj = r4:
+// state byte +8, frames left +0xA, sprite pointer +0x28). State 5 draws it
+// rising for 20 frames; state 6 then draws it 7 more frames, in place and at
+// full opacity, and state 7 frees it, so it vanishes. Presentation only, the
+// guest's timing is untouched: over its last 14 frames the sprite fades out,
+// and in state 6 it keeps rising, kRiseBoost times faster than in state 5.
+NDS_TITLE_HOOK void Dq9HarvestIconBegin(uint32_t* sprite, uint32_t* obj) {
+    constexpr int kStateRise = 5, kStateEnd = 6, kFadeFrames = 14,
+                  kEndFrames = 7, kRiseBoost = 3;
+    static int32_t prev_y = 0, rise = 0, extra = 0;
+    static bool have_prev = false;
+    const uint32_t state = bus_read_u8(*obj + 8);
+    const int left = static_cast<int>(bus_read_u16(*obj + 0xA));
+    const int32_t y = static_cast<int32_t>(bus_read_u32(*sprite + 0x20));
+    int64_t dy = 0;
+    int t = -1;  // frames until the sprite is freed
+    if (state == kStateRise) {
+        if (left >= 0x13) have_prev = false;
+        if (have_prev && y != prev_y) rise = y - prev_y;
+        prev_y = y;
+        have_prev = true;
+        extra = 0;
+        t = left + kEndFrames;
+    } else if (state == kStateEnd) {
+        ++extra;
+        if (rise < 0) dy = static_cast<int64_t>(rise) * extra * kRiseBoost;
+        t = left;
+    }
+    if (t >= 0 && t < kFadeFrames)
+        bus_write_u16(*sprite + 0x82,
+                      static_cast<uint16_t>(31 * (t + 1) / kFadeFrames));
+    WorldIconPush(*sprite, dy);
 }
 
 NDS_TITLE_HOOK void Dq9WorldIconEnd() {
