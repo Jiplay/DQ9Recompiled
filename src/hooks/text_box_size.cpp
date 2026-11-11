@@ -157,6 +157,21 @@ NDS_TITLE_HOOK void Dq9InteractPrompt() {
     ScaleAboutCentre();
 }
 
+// The prompt's touch area (ov17 0x0219AA7C) is tested against the icon's
+// unscaled rect, but the icon is drawn shrunk about the centre: the touch
+// (field walk: read 1:1) is mapped back, p -> a + (p - a) / k, so the area
+// matches what is drawn.
+NDS_TITLE_HOOK void Dq9InteractPromptTouch(uint32_t* x, uint32_t* y) {
+    const int32_t k = TextBoxScale();
+    if (k >= kOne) return;
+    auto unscale = [k](uint32_t* v, int anchor) {
+        const int64_t d = static_cast<int32_t>(*v) - anchor;
+        *v = static_cast<uint32_t>(anchor + d * kOne / k);
+    };
+    unscale(x, kAnchorX);
+    unscale(y, kAnchorY);
+}
+
 // Icons the field draws over a world point (the harvest spot's sprite, among
 // others): ov17 projects the point to the screen (0x0202EC94), stores the
 // sprite's position minus (12, 40) px at +0x1C / +0x20 (fx32) and draws it

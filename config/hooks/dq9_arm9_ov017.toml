@@ -17,6 +17,16 @@ address = 0x0219B088      # bl 0x0204725C (step the icon's animation)
 mode = "arm"
 name = "Dq9InteractPrompt"
 
+# The prompt's touch area: 0x0219AA7C tests the release position (touch
+# +0x38/+0x3C, loaded into r5/r4 at 0x0219ACA8/0x0219ACAC) against the icon's
+# unscaled rect (x r3, y sp+0, size r6 x r0). The hook, right before the
+# compare, maps the position back through the scale the icon is drawn with.
+[[hook]]
+address = 0x0219ACB0      # cmp r3, r5 (r5 = touch x, r4 = touch y)
+mode = "arm"
+name = "Dq9InteractPromptTouch"
+registers = ["r5", "r4"]
+
 # Icons drawn over a world point (the sprite shown at a harvest spot, among
 # others): each site stores the projected position at sprite+0x1C/+0x20, then
 # calls 0x020473D8(sprite, 1), which pushes and pops by itself. Begin (before
