@@ -27,8 +27,10 @@
 
 namespace {
 
+// Auto is the last value so the saved 0..4 keep their meaning.
+constexpr int kAuto = 5;
 constexpr const char* kChoices[] = {"Scale with window", "1x", "2x", "3x",
-                                    "4x"};
+                                    "4x", "Auto"};
 
 constexpr NdsTitleSetting kUiSize = {
     "ui_size",
@@ -36,10 +38,11 @@ constexpr NdsTitleSetting kUiSize = {
     "Shows the text boxes and menus at a fixed size, as big as on a screen "
     "this many times the DS screen, so a big window shows more of the scene "
     "around them. Scale with window stretches them with the screen, as on "
-    "the DS. The 3D text boxes shrink only with a 3D resolution above 1x.",
-    0, 4, 1,
+    "the DS. Auto follows the window: half its height, never under 2x or "
+    "over 4x. The 3D text boxes shrink only with a 3D resolution above 1x.",
+    0, 5, 1,
     kChoices, sizeof(kChoices) / sizeof(kChoices[0]), nullptr,
-    2,
+    kAuto,
 };
 
 const int kUiSizeId = nds_title_setting_register(&kUiSize);
@@ -48,10 +51,16 @@ const int kUiSizeId = nds_title_setting_register(&kUiSize);
 double UiScale() {
     const int multiple = nds_title_setting_value(kUiSizeId);
     if (multiple <= 0) return 1.0;
-    const int reference = 192 * multiple;
     const int points = nds_title_display_height();
+    double reference = 192.0 * multiple;
+    if (multiple == kAuto) {
+        // Half the window's height, within 2x..4x of the DS screen.
+        reference = points / 2.0;
+        if (reference < 192.0 * 2) reference = 192.0 * 2;
+        if (reference > 192.0 * 4) reference = 192.0 * 4;
+    }
     if (points <= reference) return 1.0;
-    return static_cast<double>(reference) / static_cast<double>(points);
+    return reference / static_cast<double>(points);
 }
 
 constexpr int kAnchorX = 128;

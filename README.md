@@ -119,9 +119,10 @@ Shipped hooks:
   switches when it is reopened. System (the default) leaves the game
   untouched, on `[system] language` from `game.toml`.
 - **UI size** (`text_box_size.cpp`; `dq9_arm9.toml`): the runtime menu's
-  Game > UI size (`[title] ui_size`): Scale with window, 1x, 2x (the
-  default), 3x or 4x. Above Scale with window, the text boxes and menus keep
-  the size they have on a screen that many times the DS screen (2x: a
+  Game > UI size (`[title] ui_size`): Scale with window, 1x, 2x, 3x, 4x or
+  Auto (the default: half the window's height, between 2x and 4x). Above Scale
+  with window, the text boxes and menus keep the size they have on a screen
+  that many times the DS screen (2x: a
   384-point-tall window) however big the window is, scaled about the
   screen centre, so a big window shows more of the scene around them. DQ9
   draws some message windows with the 3D engine: those are scaled where the
