@@ -186,3 +186,38 @@ NDS_TITLE_HOOK bool Dq9HeapBlockLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
     *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(kHeapEntries, kHeapEntries);
     return true;
 }
+
+// At the entry of the kerning search 0x020425F4(prev = r0, cur = r1,
+// font = r2): r0 = the signed adjustment of the pair (prev & 0xFF) |
+// (cur << 8) in the font's table, or 0. At 60 FPS it scans natively and
+// returns true (the bank then does `bx lr`), leaving r0-r3, r12 and NZCV as
+// the guest code would.
+NDS_TITLE_HOOK bool Dq9KerningLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
+                                     uint32_t* r3, uint32_t* r12,
+                                     uint32_t* cpsr) {
+    constexpr uint32_t kFontTable = 0x0210782Cu;
+    if (!Fast()) return false;
+    const uint32_t nzcv_mask = kCpsrN | kCpsrZ | kCpsrC | kCpsrV;
+    const uint32_t key = ((*r0 & 0xFFu) | ((*r1 << 24) >> 16)) & 0xFFFFu;
+    const uint32_t font = bus_read_u32(kFontTable + (*r2 << 2));
+    const uint32_t count = bus_read_u32(font + 8u);
+    uint32_t entry = bus_read_u32(font + 0xCu);
+    for (uint32_t i = 0u; i < count; ++i, entry += 4u) {
+        *r1 = bus_read_u16(entry);
+        if (*r1 == key) {
+            *r0 = static_cast<uint32_t>(
+                static_cast<int32_t>(static_cast<int8_t>(bus_read_u8(entry + 2u))));
+            *r2 = entry;
+            *r3 = count;
+            *r12 = i;
+            *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(*r1, key);
+            return true;
+        }
+    }
+    *r0 = 0u;
+    *r2 = entry;
+    *r3 = count;
+    *r12 = count;
+    *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(count, count);
+    return true;
+}

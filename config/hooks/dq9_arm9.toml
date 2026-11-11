@@ -458,6 +458,29 @@ registers = ["r0", "r1", "r2", "r3", "cpsr"]
 on_true = "return"
 on_false = "continue"
 
+# Part 5: the kerning search 0x020425F4(prev, cur, font), run for every
+# character of the window and of the choice options on every pass. A linear
+# scan of the font's pair table (4-byte entries: u16 prev | cur << 8, s8):
+#   0x020425F4  ldr r12, =0x0210782C ; and r3, r0, #0xFF
+#               ldr r2, [r12, r2, lsl #2]   ; font
+#               mov r0, r1, lsl #24 ; orr r0, r3, r0, lsr #16
+#               ldr r3, [r2, #8]            ; count
+#               mov r0, r0, lsl #16 ; ldr r2, [r2, #0xC] ; table
+#               mov r12, #0 ; b 0x02042634
+#   0x0204261C  ldrh r1, [r2] ; cmp r1, r0, lsr #16
+#               ldrsbeq r0, [r2, #2] ; bxeq lr
+#               add r2, r2, #4 ; add r12, r12, #1
+#   0x02042634  cmp r12, r3 ; bcc 0x0204261C ; mov r0, #0 ; bx lr
+# At 60 FPS the hook does the scan natively (same r0-r3, r12 and NZCV on
+# exit) and returns. Handler: src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x020425F4      # function entry (r0 = previous char, r1 = char, r2 = font)
+mode = "arm"
+name = "Dq9KerningLookup"
+registers = ["r0", "r1", "r2", "r3", "r12", "cpsr"]
+on_true = "return"
+on_false = "continue"
+
 # Right click = the message box's "next" key, like B (0x403 = A/B/X in the
 # check at 0x020440DC, which sets r5 = 1). The hook runs after the second key
 # test, before `cmp r0, #0` at 0x02044168. Handler: Dq9TextAdvanceRightClick
