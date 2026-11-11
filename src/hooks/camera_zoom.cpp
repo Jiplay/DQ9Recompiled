@@ -33,19 +33,18 @@ namespace {
 
 // Auto is 0: a fixed distance is never 0%.
 constexpr int kAuto = 0;
-constexpr const char* kChoices[] = {"Auto", "50%",  "75%",  "100%",
-                                    "125%", "150%", "175%", "200%",
-                                    "250%", "300%", "400%"};
-constexpr int kValues[] = {kAuto, 50, 75, 100, 125, 150, 175, 200, 250, 300,
-                           400};
+constexpr const char* kChoices[] = {"Auto", "100%", "125%", "150%",
+                                    "175%", "200%", "250%", "300%",
+                                    "400%"};
+constexpr int kValues[] = {kAuto, 100, 125, 150, 175, 200, 250, 300, 400};
 
 constexpr NdsTitleSetting kCameraDistance = {
     "camera_distance",
     "Camera distance",
     "How far the camera sits from what it looks at. Above 100% zooms out "
-    "and shows more around you; below zooms in. Auto follows the window "
+    "and shows more around you. Auto follows the window "
     "size: characters keep their size and a bigger window shows more.",
-    0, 400, 25,
+    100, 400, 25,
     kChoices, sizeof(kChoices) / sizeof(kChoices[0]), kValues,
     kAuto,
 };
@@ -55,7 +54,7 @@ const int kCameraDistanceId = nds_title_setting_register(&kCameraDistance);
 // Auto: 100% when the main screen is shown 2x (the default window), and
 // proportional to its height, within the fixed choices' range.
 constexpr int kAutoReferencePoints = 192 * 2;
-constexpr int kAutoMinPermille = 500;
+constexpr int kAutoMinPermille = 1000;
 constexpr int kAutoMaxPermille = 4000;
 
 // The distance to use, in thousandths of the game's own (1000 = untouched).
@@ -67,10 +66,21 @@ constexpr int kAutoMaxPermille = 4000;
 // model (Stella, the monster, the character) beside the 2D layout: moving
 // it back shrinks the model toward the screen centre, away from the place
 // the page keeps for it.
+// In battle the distance is capped at 200%.
+constexpr int kBattleMaxPermille = 2000;
+
+int RawCameraDistancePermille();
+
 int CameraDistancePermille() {
+    const int permille = RawCameraDistancePermille();
+    return dq9::InBattle() ? std::min(permille, kBattleMaxPermille)
+                           : permille;
+}
+
+int RawCameraDistancePermille() {
     if (dq9::FullScreenPage()) return 1000;
     const int value = nds_title_setting_value(kCameraDistanceId);
-    if (value != kAuto) return value * 10;
+    if (value != kAuto) return std::max(value, 100) * 10;
     const int points = nds_title_display_height();
     if (points <= 0) return 1000;
     const int permille = static_cast<int>(

@@ -14,7 +14,6 @@ sha1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 # One window led by the DS main screen (engine A's LCD). Backtick swaps the
 # two screens; holding Tab (the virtual stylus) peeks at the other one.
 screen_layout = "single"     # single | stacked | separate
-window_mode = "letterbox"    # letterbox | stretch | original (1:1)
 scaling = "nearest"          # nearest | bilinear | integer (pixel-perfect)
 # 3D detail as a % of the window's resolution (>100 supersamples). Replace
 # with internal_resolution = N to pin a fixed multiplier instead.

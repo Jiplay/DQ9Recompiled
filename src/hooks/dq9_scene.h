@@ -17,6 +17,10 @@ inline int LoadedOverlay(uint32_t slot) {
     return static_cast<int8_t>(bus_read_u8(0x01FFD364 + 6 * bank + slot));
 }
 
+// In battle: the field loads overlay 0 in slot 0 for it (see
+// text_box_size.cpp, InGame).
+inline bool InBattle() { return LoadedOverlay(0) == 0; }
+
 // The battle records pages (see FullScreenPage). The battle records (camp
 // menu > Battle records, overlay 8 in slot 1; the field and the camp menu have overlay 11 there) fill engine A
 // with a wallpaper on BG1 (screen base 30), draw the buttons, the cursor

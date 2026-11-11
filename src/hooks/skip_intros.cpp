@@ -1,4 +1,4 @@
-// Skip intros (Game > Skip intros, [title] skip_intros in settings.toml, on
+// Skip intros (Game > Skip intros, [title] skip_intros in settings.toml, off
 // by default): skip the boot logos and the opening movie by steering two of
 // the game's own branches onto the paths it already takes after a soft
 // reset. Each handler only changes the register a compare is about to test;
@@ -19,7 +19,7 @@ constexpr NdsTitleSetting kSkipIntros = {
     "soft reset. Off shows them as on the DS.",
     0, 1, 1,
     kChoices, sizeof(kChoices) / sizeof(kChoices[0]), nullptr,
-    1,
+    0,
 };
 
 const int kSkipIntrosId = nds_title_setting_register(&kSkipIntros);
