@@ -1,0 +1,233 @@
+// The Options pages' content, shared by the menus that show them: the title
+// menu (options_row.cpp) and the camp menu's Misc. list (camp_options.cpp).
+//
+// The rows and their values are the runtime menu's (title_menu.h), so every
+// menu shows the same settings; the labels are translated here
+// (res/lang/*.toml [options]), English when a key is missing.
+#pragma once
+
+#include <cctype>
+#include <cstdint>
+#include <map>
+#include <string>
+#include <vector>
+
+#include "lang.h"
+#include "title_hooks.h"
+#include "title_menu.h"
+
+namespace dq9::options {
+
+struct Row {
+    enum class Kind { Category, Item, Back } kind = Kind::Back;
+    std::string section;   // Category
+    NdsTitleMenuRow item;  // Item
+};
+
+struct Model {
+    std::string section;  // "" = the categories page
+    std::vector<Row> rows;
+    std::map<std::string, uint32_t> cursor;  // per page
+    // Values asked for and not yet in the frontend's rows.
+    std::map<std::string, int> pending;
+};
+
+inline std::string Slug(const std::string& text) {
+    std::string out;
+    for (const char c : text) {
+        if (std::isalnum(static_cast<unsigned char>(c)))
+            out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        else if (!out.empty() && out.back() != '_')
+            out += '_';
+    }
+    while (!out.empty() && out.back() == '_') out.pop_back();
+    return out;
+}
+
+// [options] `key` in the game's language, or `english`.
+inline std::string Text(const std::string& key, const std::string& english) {
+    const char* text = dq9::Tr("options", key.c_str(),
+                               bus_read_u8(dq9::kGameTextLanguage));
+    return *text ? text : english;
+}
+
+inline bool Hidden(const NdsTitleMenuRow& row) {
+    // Not shown: the Netplay rows (their labels change every frame and the
+    // lobby name is typed) and System (Resume and Quit).
+    return row.section == "Netplay" || row.section == "System" ||
+           !row.enabled ||
+           (row.type != NdsTitleMenuRowType::Bool &&
+            row.type != NdsTitleMenuRowType::Int &&
+            row.type != NdsTitleMenuRowType::Choice);
+}
+
+inline int ValueOf(const Model& model, const NdsTitleMenuRow& row) {
+    const auto it = model.pending.find(row.key);
+    return it != model.pending.end() ? it->second : row.value;
+}
+
+inline int Step(const NdsTitleMenuRow& row) {
+    int step = row.step > 0 ? row.step : 1;
+    if ((row.maximum - row.minimum) / step > 40) step *= 10;
+    return step;
+}
+
+inline std::string ValueText(const Model& model, const NdsTitleMenuRow& row) {
+    const int value = ValueOf(model, row);
+    switch (row.type) {
+    case NdsTitleMenuRowType::Bool:
+        return value ? Text("v_on", "On") : Text("v_off", "Off");
+    case NdsTitleMenuRowType::Choice:
+        for (size_t i = 0; i < row.choices.size(); ++i) {
+            if (row.choice_values[i] == value)
+                return Text("v_" + Slug(row.choices[i]), row.choices[i]);
+        }
+        return std::to_string(value);
+    default: {
+        const bool percent = row.key == "audio.volume" ||
+                             row.key == "display.second_screen_size" ||
+                             row.key == "input.mouse_sensitivity";
+        return std::to_string(value) + (percent ? "%" : "");
+    }
+    }
+}
+
+inline std::string RowText(const Model& model, const Row& row) {
+    switch (row.kind) {
+    case Row::Kind::Category:
+        return Text("cat_" + Slug(row.section), row.section);
+    case Row::Kind::Item:
+        return Text(Slug(row.item.key), row.item.label) + ": " +
+               ValueText(model, row.item);
+    default:
+        return Text("back", "Back");
+    }
+}
+
+// The row's description, on one line ("" for Back).
+inline std::string DescriptionText(const Row& row) {
+    switch (row.kind) {
+    case Row::Kind::Category:
+        return Text("d_cat_" + Slug(row.section), "");
+    case Row::Kind::Item:
+        return Text("d_" + Slug(row.item.key), row.item.description);
+    default:
+        return "";
+    }
+}
+
+// `text` in at most `max_lines` lines of `line_chars` characters (a <tag>
+// counts as one).
+inline std::vector<std::string> Wrap(const std::string& text, size_t line_chars,
+                                     size_t max_lines) {
+    std::vector<std::string> lines;
+    std::string line;
+    size_t width = 0;
+    size_t pos = 0;
+    while (pos < text.size() && lines.size() < max_lines) {
+        const size_t end = text.find(' ', pos);
+        const std::string word =
+            text.substr(pos, end == std::string::npos ? end : end - pos);
+        pos = end == std::string::npos ? text.size() : end + 1;
+        size_t word_width = 0;
+        for (size_t i = 0; i < word.size(); ++i, ++word_width) {
+            if (word[i] != '<') continue;
+            const size_t close = word.find('>', i);
+            if (close != std::string::npos) i = close;
+        }
+        if (!line.empty() && width + 1 + word_width > line_chars) {
+            lines.push_back(line);
+            line.clear();
+            width = 0;
+        }
+        if (!line.empty()) {
+            line += ' ';
+            ++width;
+        }
+        line += word;
+        width += word_width;
+    }
+    if (!line.empty() && lines.size() < max_lines) lines.push_back(line);
+    return lines;
+}
+
+// The rows of the model's page: at most `max_rows`, with a Back row at the
+// end when `back` is set.
+inline void BuildRows(Model& model, size_t max_rows, bool back = true) {
+    model.rows.clear();
+    const std::vector<NdsTitleMenuRow> all = nds_title_menu_rows();
+    // A value the frontend now reports needs no override any more.
+    for (const NdsTitleMenuRow& row : all) {
+        const auto it = model.pending.find(row.key);
+        if (it != model.pending.end() && it->second == row.value)
+            model.pending.erase(it);
+    }
+    for (const NdsTitleMenuRow& row : all) {
+        if (Hidden(row) || model.rows.size() + (back ? 1 : 0) >= max_rows)
+            continue;
+        if (model.section.empty()) {
+            bool seen = false;
+            for (const Row& r : model.rows) seen |= r.section == row.section;
+            if (seen) continue;
+            Row r;
+            r.kind = Row::Kind::Category;
+            r.section = row.section;
+            model.rows.push_back(std::move(r));
+        } else if (row.section == model.section) {
+            Row r;
+            r.kind = Row::Kind::Item;
+            r.item = row;
+            model.rows.push_back(std::move(r));
+        }
+    }
+    if (back) model.rows.emplace_back();
+}
+
+inline bool SetValue(Model& model, const NdsTitleMenuRow& row, int value) {
+    if (value == ValueOf(model, row)) return false;
+    model.pending[row.key] = value;
+    nds_title_menu_set(row.key, value);
+    return true;
+}
+
+// Steps the row's value. direction: -1 left, +1 right, 0 chosen (steps
+// forward and wraps). True when the value changed.
+inline bool Change(Model& model, const NdsTitleMenuRow& row, int direction) {
+    const int value = ValueOf(model, row);
+    switch (row.type) {
+    case NdsTitleMenuRowType::Bool:
+        return SetValue(model, row, direction == 0 ? !value : direction > 0);
+    case NdsTitleMenuRowType::Choice: {
+        const int count = static_cast<int>(row.choices.size());
+        if (!count) return false;
+        int index = 0;
+        for (int i = 0; i < count; ++i)
+            if (row.choice_values[static_cast<size_t>(i)] == value) index = i;
+        if (direction == 0)
+            index = (index + 1) % count;
+        else
+            index += direction;
+        if (index < 0 || index >= count) return false;
+        return SetValue(model, row, row.choice_values[static_cast<size_t>(index)]);
+    }
+    case NdsTitleMenuRowType::Int: {
+        int next = value + Step(row) * (direction == 0 ? 1 : direction);
+        if (direction == 0 && value >= row.maximum) next = row.minimum;
+        if (next > row.maximum) next = row.maximum;
+        if (next < row.minimum) next = row.minimum;
+        return SetValue(model, row, next);
+    }
+    default:
+        return false;
+    }
+}
+
+inline void WriteString(uint32_t address, uint32_t size, const std::string& text) {
+    const uint32_t len = static_cast<uint32_t>(
+        text.size() < size ? text.size() : size - 1u);
+    for (uint32_t i = 0; i < len; ++i)
+        bus_write_u8(address + i, static_cast<uint8_t>(text[i]));
+    bus_write_u8(address + len, 0u);
+}
+
+}  // namespace dq9::options

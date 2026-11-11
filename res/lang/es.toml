@@ -3,6 +3,9 @@ name = "Español"
 [main_menu]
 options = "Opciones"
 
+[camp_menu]
+options_description = "Permite cambiar los ajustes de pantalla, sonido, controles y juego."
+
 [options]
 cat_display = "Pantalla"
 cat_audio = "Audio"

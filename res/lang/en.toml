@@ -6,6 +6,10 @@ name = "English"
 [main_menu]
 options = "Options"
 
+# The Misc. list's Options row (src/hooks/camp_options.cpp).
+[camp_menu]
+options_description = "Change the display, audio, input and game settings."
+
 # The Options pages (src/hooks/options_row.cpp). Keys are built from the
 # runtime menu's rows: cat_<section>, <row key with _ for .>, v_<choice>,
 # each lower case with _ for anything but letters and digits. A row or

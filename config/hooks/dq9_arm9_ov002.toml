@@ -19,3 +19,91 @@ address = 0x0215BBE4      # beq (Z = pen not down; camp menu)
 mode = "arm"
 name = "Dq9MouseMenuListGreen"
 registers = ["cpsr"]
+
+# The Misc. list's "Options" row and its pages. Handler:
+# src/hooks/camp_options.cpp; the text is res/lang/*.toml ([main_menu]
+# options, [camp_menu], [options]).
+#
+# The camp menu (r0 of its state steps, table 0x0216CD74, 8 bytes each) keeps
+# its state at +0x1BB8 (= the id of the top window) and a sub-state at
+# +0x1BC0. Misc. is state and window 0x15, step 0x02166168, with the
+# description of the entry under the cursor in window 0x16:
+#   - 0x02156080(camp, s16 codes[9], s16* count) lists the entries: codes
+#     0..8 (2 and 8 only at times, 6 never), text 4001 + code and description
+#     4020 + code in str_tm. Its callers size the window (0x0215BE00), set
+#     up the cursor (0x02161CF0), build the two windows' markup (0x0215F4E8,
+#     0x0215F644) and pick the chosen entry's code (0x02166344).
+#   - sub-state 0 puts the cursor (+0x1BFE) on entry 0 and opens the two
+#     windows (0x0215F3A0); a window that is already open is left as it is.
+#   - sub-state 1 runs the list; `cmp r0, #8; addls pc, ...` switches on the
+#     chosen code, and B closes both windows with 0x02156E90, which goes
+#     back to the state of the window underneath.
+[[hook]]
+address = 0x02156154      # add r1, sp, #0 (the list is built: r7 entries at sp)
+mode = "arm"
+name = "Dq9CampOptionsList"
+registers = ["r7", "sp"]
+
+[[hook]]
+address = 0x0215BED8      # ldrb r0, [r6] (the next window's size is set)
+mode = "arm"
+name = "Dq9CampOptionsSize"
+registers = ["r4", "r6"]
+
+[[hook]]
+address = 0x0215F53C      # mov r1, r0 (r0 = the list window's title)
+mode = "arm"
+name = "Dq9CampOptionsTitle"
+registers = ["r0"]
+
+[[hook]]
+address = 0x0215F5E4      # mov r2, r0 (r0 = the text of entry r7, code r8)
+mode = "arm"
+name = "Dq9CampOptionsLabel"
+registers = ["r0", "r7", "r8"]
+
+[[hook]]
+address = 0x0215F690      # mov r1, r0 (r0 = the description, r5 = camp)
+mode = "arm"
+name = "Dq9CampOptionsDescription"
+registers = ["r0", "r5"]
+
+[[hook]]
+address = 0x021661B0      # bl 0x0205DE34 (sub-state 0, cursor just reset)
+mode = "arm"
+name = "Dq9CampOptionsOpen"
+registers = ["r8"]
+
+[[hook]]
+address = 0x021661E0      # add r3, r8, #0x2000 (sub-state 1, every frame)
+mode = "arm"
+name = "Dq9CampOptionsFrame"
+registers = ["r8"]
+on_true = "jump"
+jump_address = 0x02166588 # mov r0, r8; ...; bl 0x02156E90 (close the list)
+
+[[hook]]
+address = 0x0216627C      # cmp r0, #0 (r0 != 0: draw the list window again)
+mode = "arm"
+name = "Dq9CampOptionsRedraw"
+registers = ["r0"]
+
+[[hook]]
+address = 0x02166344      # cmp r0, #8 (r0 = the chosen entry's code)
+mode = "arm"
+name = "Dq9CampOptionsChoose"
+registers = ["r0"]
+on_true = "jump"
+jump_address = 0x021663B4 # case 1: the choice sound, then state 0x18
+
+[[hook]]
+address = 0x02166580      # cmp r0, #0 (r0 != 0: B closes the list)
+mode = "arm"
+name = "Dq9CampOptionsBack"
+registers = ["r0", "r8"]
+
+[[hook]]
+address = 0x0216659C      # add sp, sp, #0x14 (the end of the Misc. step)
+mode = "arm"
+name = "Dq9CampOptionsExit"
+registers = ["r8"]

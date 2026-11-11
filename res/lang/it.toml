@@ -3,6 +3,9 @@ name = "Italiano"
 [main_menu]
 options = "Opzioni"
 
+[camp_menu]
+options_description = "Modifica le impostazioni di schermo, audio, comandi e gioco."
+
 [options]
 cat_display = "Schermo"
 cat_audio = "Audio"

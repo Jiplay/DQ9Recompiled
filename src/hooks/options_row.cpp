@@ -15,9 +15,8 @@
 // other: it returns true to jump to a `bx r12` with lr set to the handler,
 // so each call comes back to the hook.
 //
-// The rows and their values are the runtime menu's (title_menu.h), so both
-// menus show the same settings; the labels are translated here
-// (res/lang/*.toml [options]), English when a key is missing.
+// The rows, their values and their translated labels come from
+// options_model.h, which the camp menu's Options row shares.
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -27,9 +26,7 @@
 #include <string>
 #include <vector>
 
-#include "lang.h"
-#include "title_hooks.h"
-#include "title_menu.h"
+#include "options_model.h"
 
 namespace {
 
@@ -172,21 +169,12 @@ void Then(std::function<void(uint32_t)> fn) {
 
 // ---- The pages ----------------------------------------------------------
 
-struct Row {
-    enum class Kind { Category, Item, Back } kind = Kind::Back;
-    std::string section;   // Category
-    NdsTitleMenuRow item;  // Item
-};
+using namespace dq9::options;
 
-struct Menu {
+struct Menu : Model {
     bool open = false;
     uint32_t scene = 0;
     uint32_t grid = 0;
-    std::string section;  // "" = the categories page
-    std::vector<Row> rows;
-    std::map<std::string, uint32_t> cursor;  // per page
-    // Values asked for and not yet in the frontend's rows.
-    std::map<std::string, int> pending;
     uint32_t described = ~0u;  // the row the description is of
     uint8_t saved_grid[kGridSavedEnd - kGridSavedBegin] = {};
 };
@@ -206,159 +194,6 @@ uint32_t FindTyped(uint32_t scene, uint32_t id, uint32_t type) {
     return w && bus_read_u16(w + kWidgetType) == type ? w : 0;
 }
 
-std::string Slug(const std::string& text) {
-    std::string out;
-    for (const char c : text) {
-        if (std::isalnum(static_cast<unsigned char>(c)))
-            out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        else if (!out.empty() && out.back() != '_')
-            out += '_';
-    }
-    while (!out.empty() && out.back() == '_') out.pop_back();
-    return out;
-}
-
-// [options] `key` in the game's language, or `english`.
-std::string Text(const std::string& key, const std::string& english) {
-    const char* text = dq9::Tr("options", key.c_str(),
-                               bus_read_u8(dq9::kGameTextLanguage));
-    return *text ? text : english;
-}
-
-bool Hidden(const NdsTitleMenuRow& row) {
-    // Not in this draft: the Netplay rows (their labels change every frame
-    // and the lobby name is typed) and System (Resume and Quit).
-    return row.section == "Netplay" || row.section == "System" ||
-           !row.enabled ||
-           (row.type != NdsTitleMenuRowType::Bool &&
-            row.type != NdsTitleMenuRowType::Int &&
-            row.type != NdsTitleMenuRowType::Choice);
-}
-
-int ValueOf(const NdsTitleMenuRow& row) {
-    const auto it = g_menu.pending.find(row.key);
-    return it != g_menu.pending.end() ? it->second : row.value;
-}
-
-int Step(const NdsTitleMenuRow& row) {
-    int step = row.step > 0 ? row.step : 1;
-    if ((row.maximum - row.minimum) / step > 40) step *= 10;
-    return step;
-}
-
-std::string ValueText(const NdsTitleMenuRow& row) {
-    const int value = ValueOf(row);
-    switch (row.type) {
-    case NdsTitleMenuRowType::Bool:
-        return value ? Text("v_on", "On") : Text("v_off", "Off");
-    case NdsTitleMenuRowType::Choice:
-        for (size_t i = 0; i < row.choices.size(); ++i) {
-            if (row.choice_values[i] == value)
-                return Text("v_" + Slug(row.choices[i]), row.choices[i]);
-        }
-        return std::to_string(value);
-    default: {
-        const bool percent = row.key == "audio.volume" ||
-                             row.key == "display.second_screen_size" ||
-                             row.key == "input.mouse_sensitivity";
-        return std::to_string(value) + (percent ? "%" : "");
-    }
-    }
-}
-
-std::string RowText(const Row& row) {
-    switch (row.kind) {
-    case Row::Kind::Category:
-        return Text("cat_" + Slug(row.section), row.section);
-    case Row::Kind::Item:
-        return Text(Slug(row.item.key), row.item.label) + ": " +
-               ValueText(row.item);
-    default:
-        return Text("back", "Back");
-    }
-}
-
-// The row's description, in lines that fit the panel.
-std::vector<std::string> Description(const Row& row) {
-    std::string text;
-    switch (row.kind) {
-    case Row::Kind::Category:
-        text = Text("d_cat_" + Slug(row.section), "");
-        break;
-    case Row::Kind::Item:
-        text = Text("d_" + Slug(row.item.key), row.item.description);
-        break;
-    default:
-        break;
-    }
-    std::vector<std::string> lines;
-    std::string line;
-    size_t width = 0;  // a <tag> is one character
-    size_t pos = 0;
-    while (pos < text.size() && lines.size() < kDescLines) {
-        const size_t end = text.find(' ', pos);
-        const std::string word =
-            text.substr(pos, end == std::string::npos ? end : end - pos);
-        pos = end == std::string::npos ? text.size() : end + 1;
-        size_t word_width = 0;
-        for (size_t i = 0; i < word.size(); ++i, ++word_width) {
-            if (word[i] != '<') continue;
-            const size_t close = word.find('>', i);
-            if (close != std::string::npos) i = close;
-        }
-        if (!line.empty() && width + 1 + word_width > kDescLineChars) {
-            lines.push_back(line);
-            line.clear();
-            width = 0;
-        }
-        if (!line.empty()) {
-            line += ' ';
-            ++width;
-        }
-        line += word;
-        width += word_width;
-    }
-    if (!line.empty() && lines.size() < kDescLines) lines.push_back(line);
-    return lines;
-}
-
-void BuildRows() {
-    g_menu.rows.clear();
-    const std::vector<NdsTitleMenuRow> all = nds_title_menu_rows();
-    // A value the frontend now reports needs no override any more.
-    for (const NdsTitleMenuRow& row : all) {
-        const auto it = g_menu.pending.find(row.key);
-        if (it != g_menu.pending.end() && it->second == row.value)
-            g_menu.pending.erase(it);
-    }
-    for (const NdsTitleMenuRow& row : all) {
-        if (Hidden(row) || g_menu.rows.size() + 1 >= kMaxRows) continue;
-        if (g_menu.section.empty()) {
-            bool seen = false;
-            for (const Row& r : g_menu.rows) seen |= r.section == row.section;
-            if (seen) continue;
-            Row r;
-            r.kind = Row::Kind::Category;
-            r.section = row.section;
-            g_menu.rows.push_back(std::move(r));
-        } else if (row.section == g_menu.section) {
-            Row r;
-            r.kind = Row::Kind::Item;
-            r.item = row;
-            g_menu.rows.push_back(std::move(r));
-        }
-    }
-    g_menu.rows.emplace_back();  // Back
-}
-
-void WriteString(uint32_t address, uint32_t size, const std::string& text) {
-    const uint32_t len = static_cast<uint32_t>(
-        text.size() < size ? text.size() : size - 1u);
-    for (uint32_t i = 0; i < len; ++i)
-        bus_write_u8(address + i, static_cast<uint8_t>(text[i]));
-    bus_write_u8(address + len, 0u);
-}
-
 uint32_t PageHeight(uint32_t rows) {
     return (kRowY + kRowPitch * (rows ? rows : 1) + 9 + 7) / 8;
 }
@@ -370,7 +205,9 @@ void ShowDescription() {
     const uint32_t index = bus_read_u16(g_menu.grid + kGridRow);
     g_menu.described = index;
     std::vector<std::string> lines;
-    if (index < g_menu.rows.size()) lines = Description(g_menu.rows[index]);
+    if (index < g_menu.rows.size())
+        lines = Wrap(DescriptionText(g_menu.rows[index]), kDescLineChars,
+                     kDescLines);
     for (uint32_t i = 0; i < kDescLines; ++i) {
         const uint32_t cell = FindTyped(scene, kFirstDescCell + i, kTypeCell);
         if (!cell) continue;
@@ -394,14 +231,14 @@ void ShowDescription() {
 // panel at the page's height, which draws them.
 void ShowPage() {
     const uint32_t scene = g_menu.scene, grid = g_menu.grid;
-    BuildRows();
+    BuildRows(g_menu, kMaxRows);
     uint32_t count = 0;
     for (uint32_t i = 0; i < kMaxRows; ++i) {
         const uint32_t cell = FindTyped(scene, kFirstCell + i, kTypeCell);
         if (!cell) continue;  // the arena was full: fewer rows
         if (count < g_menu.rows.size() && count == i) {
             const uint32_t text = kRowText + i * kRowTextSize;
-            WriteString(text, kRowTextSize, RowText(g_menu.rows[i]));
+            WriteString(text, kRowTextSize, RowText(g_menu, g_menu.rows[i]));
             bus_write_u32(cell + kCellText, text);
             bus_write_u16(cell + kCellX, kRowX);
             bus_write_u16(cell + kCellY,
@@ -421,7 +258,7 @@ void ShowPage() {
         if (count) {
             g_menu.rows[count - 1] = Row{};
             WriteString(kRowText + (count - 1) * kRowTextSize, kRowTextSize,
-                        RowText(g_menu.rows[count - 1]));
+                        RowText(g_menu, g_menu.rows[count - 1]));
         }
         g_menu.rows.resize(count);
     }
@@ -538,47 +375,6 @@ void Close() {
     });
 }
 
-void SetValue(const NdsTitleMenuRow& row, int value) {
-    if (value == ValueOf(row)) return;
-    g_menu.pending[row.key] = value;
-    nds_title_menu_set(row.key, value);
-    ShowPage();
-}
-
-// direction: -1 left, +1 right, 0 chosen (steps forward and wraps).
-void Change(const NdsTitleMenuRow& row, int direction) {
-    const int value = ValueOf(row);
-    switch (row.type) {
-    case NdsTitleMenuRowType::Bool:
-        SetValue(row, direction == 0 ? !value : direction > 0);
-        break;
-    case NdsTitleMenuRowType::Choice: {
-        const int count = static_cast<int>(row.choices.size());
-        if (!count) break;
-        int index = 0;
-        for (int i = 0; i < count; ++i)
-            if (row.choice_values[static_cast<size_t>(i)] == value) index = i;
-        if (direction == 0)
-            index = (index + 1) % count;
-        else
-            index += direction;
-        if (index < 0 || index >= count) break;
-        SetValue(row, row.choice_values[static_cast<size_t>(index)]);
-        break;
-    }
-    case NdsTitleMenuRowType::Int: {
-        int next = value + Step(row) * (direction == 0 ? 1 : direction);
-        if (direction == 0 && value >= row.maximum) next = row.minimum;
-        if (next > row.maximum) next = row.maximum;
-        if (next < row.minimum) next = row.minimum;
-        SetValue(row, next);
-        break;
-    }
-    default:
-        break;
-    }
-}
-
 void Event(uint32_t scene) {
     if (g_menu.open && (scene != g_menu.scene || !PageShown(scene))) {
         // The scene left the page on its own (a reset, another screen). If
@@ -621,7 +417,7 @@ void Event(uint32_t scene) {
         ShowPage();
         break;
     case Row::Kind::Item:
-        Change(row.item, direction);
+        if (Change(g_menu, row.item, direction)) ShowPage();
         break;
     default:
         if (direction != 0) break;
