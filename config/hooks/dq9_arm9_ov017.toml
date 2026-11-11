@@ -89,3 +89,17 @@ registers = ["r0", "r1", "r2"]
 on_true = "jump"
 jump_address = 0x021A120C
 on_false = "continue"
+
+# 3D frame rate: the main loop (0x0218B710) ends each pass with
+#   0x0218C780  ldr r0, [r4, #0x3C8]   ; VBlanks since the last pass
+#   0x0218C784  mov r9, #1
+#   0x0218C788  rsb r7, r0, #2
+#   0x0218C78C  b   0x0218C798         ; while (r9 < r7) OS_WaitVBlankIntr()
+# then G3_SwapBuffers and one more OS_WaitVBlankIntr: two VBlanks a pass.
+# The hook lowers the bound so the extra wait is skipped. Handler:
+# src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x0218C78C      # b 0x0218C798 (r0 = VBlanks, r7 = 2 - r0)
+mode = "arm"
+name = "Dq9FrameRate"
+registers = ["r0", "r7"]
