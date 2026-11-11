@@ -415,3 +415,13 @@ registers = ["r2", "lr"]
 on_true = "jump"
 jump_address = 0x02043E94
 on_false = "continue"
+
+# Right click = the message box's "next" key, like B (0x403 = A/B/X in the
+# check at 0x020440DC, which sets r5 = 1). The hook runs after the second key
+# test, before `cmp r0, #0` at 0x02044168. Handler: Dq9TextAdvanceRightClick
+# in src/hooks/text_instant.cpp.
+[[hook]]
+address = 0x02044168      # cmp r0, #0 (r5 = "advance" flag)
+mode = "arm"
+name = "Dq9TextAdvanceRightClick"
+registers = ["r5"]
