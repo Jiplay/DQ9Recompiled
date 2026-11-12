@@ -42,6 +42,8 @@
 // on that host. Dq9TextWindowHalfRate skips that redraw on every other pass
 // of the main loop, so the window is redrawn 30 times a second as in the
 // original while 3D stays at 60 (except while a choice list is shown).
+#include "gpu3d.h"
+#include "io.h"
 #include "title_hooks.h"
 #include "title_settings.h"
 
@@ -290,5 +292,57 @@ NDS_TITLE_HOOK bool Dq9Blit4bpp(uint32_t* r0, uint32_t* r1, uint32_t* r2,
     *r1 = src;
     *r3 = static_cast<uint32_t>(y);
     *r12 = buf;
+    return true;
+}
+
+namespace {
+
+constexpr uint32_t kGxFifo = 0x04000400u;
+
+}  // namespace
+
+// At the entry of MI_CpuSend32(src = r0, dest = r1, size = r2), 0x020CA440:
+//
+//     add r12, r0, r2
+//     loop: cmp r0, r12 ; ldmlt r0!, {r2} ; strlt r2, [r1] ; blt loop
+//     bx lr
+//
+// The 3D model renderer pushes its display lists into GXFIFO through it,
+// one guest load, store and MMIO write per word: in a town at 60 FPS this
+// loop and the bus path under it were the busiest MMIO site of the ARM9.
+// At 60 FPS the hook feeds the words to the geometry engine natively and
+// returns, leaving r0, r2, r12 and NZCV as the loop would. It stops as soon
+// as the FIFO stalls (the engine's stall queue drops what is written past
+// it): r0 and r2 then hold the rest and the guest loop sends it, so the
+// stall ends the slice exactly as before. Other destinations, and sources
+// outside main RAM, run the guest loop.
+NDS_TITLE_HOOK bool Dq9GxFifoSend(uint32_t* r0, uint32_t* r1, uint32_t* r2,
+                                  uint32_t* r12, uint32_t* cpsr) {
+    if (!Fast() || *r1 != kGxFifo) return false;
+    const uint32_t src = *r0;
+    const uint32_t end = src + *r2;
+    if (static_cast<int32_t>(*r2) <= 0 || (src & 3u) != 0u ||
+        src - 0x02000000u >= 0x01000000u || end - 0x02000000u > 0x01000000u)
+        return false;
+    uint32_t p = src;
+    uint32_t last = *r2;
+    while (static_cast<int32_t>(p - end) < 0) {
+        if (nds_gxfifo_stalled()) break;
+        last = bus_read_u32(p);
+        p += 4u;
+        nds_gpu3d_write(kGxFifo, last, 4u);
+    }
+    if (static_cast<int32_t>(p - end) < 0) {
+        // Stalled: hand the remaining words to the guest loop, which starts
+        // over at `add r12, r0, r2`.
+        *r0 = p;
+        *r2 = end - p;
+        return false;
+    }
+    const uint32_t nzcv_mask = kCpsrN | kCpsrZ | kCpsrC | kCpsrV;
+    *r0 = p;
+    *r2 = last;
+    *r12 = end;
+    *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(p, end);
     return true;
 }

@@ -501,6 +501,23 @@ registers = ["r0", "r1", "r2", "r3", "r12", "sp"]
 on_true = "return"
 on_false = "continue"
 
+# Part 7: MI_CpuSend32(src, dest, size), which the 3D model renderer uses to
+# push display lists into GXFIFO (0x04000400) one word at a time:
+#   0x020CA440  add r12, r0, r2
+#   0x020CA444  cmp r0, r12 ; ldmlt r0!, {r2} ; strlt r2, [r1] ; blt 0x020CA444
+#               bx lr
+# (the SDK's conditional forms, emitted as branches). The busiest ARM9 MMIO
+# site in a town at 60 FPS. The hook feeds the words to the geometry engine
+# natively until the FIFO stalls, then hands the rest to the loop.
+# Handler: src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x020CA440      # function entry (r0 = src, r1 = dest, r2 = bytes)
+mode = "arm"
+name = "Dq9GxFifoSend"
+registers = ["r0", "r1", "r2", "r12", "cpsr"]
+on_true = "return"
+on_false = "continue"
+
 # Right click = the message box's "next" key, like B (0x403 = A/B/X in the
 # check at 0x020440DC, which sets r5 = 1). The hook runs after the second key
 # test, before `cmp r0, #0` at 0x02044168. Handler: Dq9TextAdvanceRightClick
