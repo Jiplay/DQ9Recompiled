@@ -42,9 +42,8 @@ constexpr int kModeValues[] = {kAuto, kManual};
 constexpr NdsTitleSetting kCameraMode = {
     "camera_mode",
     "Camera zoom",
-    "Auto follows the window size: characters keep their size and a bigger "
-    "window shows more. Manual uses the distance below, which the mouse "
-    "wheel and the gamepad's right stick (up/down) change.",
+    "Auto follows the window size. Manual uses the distance set with the "
+    "mouse wheel or the right stick.",  // at most three lines in the pages
     0, 1, 1,
     kModeChoices, sizeof(kModeChoices) / sizeof(kModeChoices[0]), kModeValues,
     kAuto,

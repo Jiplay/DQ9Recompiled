@@ -51,11 +51,26 @@ inline std::string Text(const std::string& key, const std::string& english) {
     return *text ? text : english;
 }
 
+inline bool IsNetplayToggle(const NdsTitleMenuRow& row) {
+    return row.key == "netplay.enabled";
+}
+
+// The one Action row the pages show: the Discord sign-in (sign-out when
+// signed in). Its label follows the account. The frontend enables it only
+// while the lobby server wants a sign-in, so it is shown only then.
+inline bool IsNetplayAccount(const NdsTitleMenuRow& row) {
+    return row.key == "netplay.account";
+}
+
 inline bool Hidden(const NdsTitleMenuRow& row) {
-    // Not shown: the Netplay rows (their labels change every frame and the
-    // lobby name is typed) and System (Resume and Quit).
-    return row.section == "Netplay" || row.section == "System" ||
-           !row.enabled ||
+    // Not shown: System (Resume and Quit) and, of Netplay, everything the
+    // game does itself: hosting follows the Rapportal, joining is the game's
+    // own host list, and the lobby is named after the host.
+    if (row.section == "System") return true;
+    if (row.section == "Netplay")
+        return IsNetplayToggle(row) ? false
+                                    : !IsNetplayAccount(row) || !row.enabled;
+    return !row.enabled ||
            (row.type != NdsTitleMenuRowType::Bool &&
             row.type != NdsTitleMenuRowType::Int &&
             row.type != NdsTitleMenuRowType::Choice);
@@ -76,6 +91,8 @@ inline std::string ValueText(const Model& model, const NdsTitleMenuRow& row) {
     const int value = ValueOf(model, row);
     switch (row.type) {
     case NdsTitleMenuRowType::Bool:
+        if (IsNetplayToggle(row))
+            return value ? Text("v_online", "Online") : Text("v_local", "Local");
         return value ? Text("v_on", "On") : Text("v_off", "Off");
     case NdsTitleMenuRowType::Choice:
         for (size_t i = 0; i < row.choices.size(); ++i) {
@@ -97,6 +114,8 @@ inline std::string RowText(const Model& model, const Row& row) {
     case Row::Kind::Category:
         return Text("cat_" + Slug(row.section), row.section);
     case Row::Kind::Item:
+        if (row.item.type == NdsTitleMenuRowType::Action)
+            return Text(Slug(row.item.key), row.item.label);
         return Text(Slug(row.item.key), row.item.label) + ": " +
                ValueText(model, row.item);
     default:
@@ -217,6 +236,11 @@ inline bool Change(Model& model, const NdsTitleMenuRow& row, int direction) {
         if (next < row.minimum) next = row.minimum;
         return SetValue(model, row, next);
     }
+    case NdsTitleMenuRowType::Action:
+        // Chosen only: left and right do not sign in or out.
+        if (direction != 0 || !IsNetplayAccount(row)) return false;
+        nds_title_menu_run(row.key);
+        return true;
     default:
         return false;
     }
