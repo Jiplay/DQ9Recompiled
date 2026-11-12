@@ -689,7 +689,7 @@ Public License above, version 3 or (at your option) any later version.
 
 Any binary release of this project must therefore carry these terms and make
 the corresponding source available: this repository, plus the `ndsrecomp` and
-`recomp-ui` commits it pins. The provenance record for every vendored and
+`recomp-net` commits it pins. The provenance record for every vendored and
 ported component is in the framework's `THIRD_PARTY_ATTRIBUTION.md`.
 
 Game ROMs, BIOS and firmware images, saves, and derived game data are not

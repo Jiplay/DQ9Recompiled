@@ -16,7 +16,6 @@ ROM_SHA1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 PROJECT_NAME = "DQ9Recomp"
 BANK_BUILD_DIR = "build"
 RUNNER_BUILD_DIR = "build-runner"
-RECOMP_UI_DIR = "recomp-ui"
 RECOMP_NET_DIR = "recomp-net"
 
 # The runner always links the recompiled FreeBIOS banks, which are not part of
@@ -173,18 +172,13 @@ def build_runner(args, compilers):
     elif IS_WINDOWS:
         die("no SDL3 found: pass --sdl3-dir <dir with SDL3Config.cmake> or set SDL3_DIR")
 
-    # Point CMake at the submodule explicitly: its own fallback is a hardcoded
-    # path from the author's machine, and a cached value could also win.
-    recomp_ui = args.recomp_ui or RECOMP_UI_DIR
-    configure.append(f"-DNDS_RECOMP_UI_ROOT={cmake_path(recomp_ui)}")
-
     # The cartridge banner icon becomes the Windows .exe icon.
     rom = os.path.abspath("dq9.nds")
     if os.path.exists(rom):
         configure.append(f"-DNDS_EXE_ICON_ROM={cmake_path(rom)}")
 
-    # Netplay is on unless --no-online; like recomp-ui, recomp-net comes from
-    # its submodule unless --recomp-net points elsewhere.
+    # Netplay is on unless --no-online; recomp-net comes from its submodule
+    # unless --recomp-net points elsewhere.
     configure.append(f"-DNDS_ONLINE={'ON' if args.online else 'OFF'}")
     if args.online:
         recomp_net = args.recomp_net or RECOMP_NET_DIR
@@ -262,8 +256,6 @@ def parse_args():
                    help="Keep the interpreter in the runner as a fallback")
     p.add_argument("--sdl3-dir", help="Directory with SDL3Config.cmake (default: $SDL3_DIR, "
                                       "or ../EternalSonataReprise/sdk/cmake on Windows)")
-    p.add_argument("--recomp-ui", help="Path to a recomp-ui checkout to use instead "
-                                       f"of the {RECOMP_UI_DIR}/ submodule")
     p.add_argument("--online", action=argparse.BooleanOptionalAction, default=True,
                    help="Build Netplay (online lobbies, NDS_ONLINE=ON; default); "
                         "--no-online builds the local-wireless-only runner")
@@ -284,7 +276,6 @@ def main():
 
     submodules = [
         os.path.join("ndsrecomp", "runner", "CMakeLists.txt"),
-        os.path.join(RECOMP_UI_DIR, "src", "recomp_runtime_ui.h"),
     ]
     if args.online and not args.recomp_net:
         submodules.append(os.path.join(RECOMP_NET_DIR, "include", "recomp_net", "auth.h"))

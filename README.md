@@ -96,7 +96,6 @@ other options (`--release`, `--no-online`, `--no-hooks`, ...).
 ## Credits
 
 * [ndsrecomp](https://github.com/mstan/ndsrecomp)
-* [recomp-ui](https://github.com/RetroPortingToolKit/recomp-ui)
 * [recomp-net](https://github.com/RetroPortingToolKit/recomp-net)
 * [melonDS](https://melonds.kuribo64.net/)
 

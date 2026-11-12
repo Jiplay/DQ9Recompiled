@@ -2,9 +2,6 @@
 	path = ndsrecomp
 	url = git@github.com:birabittoh/ndsrecomp.git
 	branch = dq9
-[submodule "recomp-ui"]
-	path = recomp-ui
-	url = https://github.com/RetroPortingToolKit/recomp-ui.git
 [submodule "recomp-net"]
 	path = recomp-net
 	url = https://github.com/RetroPortingToolKit/recomp-net.git
