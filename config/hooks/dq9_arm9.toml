@@ -518,6 +518,45 @@ registers = ["r0", "r1", "r2", "r12", "cpsr"]
 on_true = "return"
 on_false = "continue"
 
+# Part 8: NNS G3D's G3dGeBufferOP_N(cmd, params, n), 0x020B6ADC, run for
+# every geometry command of every model. State {buffer, busy} at
+# [0x020B6BB8]:
+#   buffer && busy && count + 1 + n <= 0xC0: append cmd and params (RAM)
+#   buffer && count: flush through 0x020B69A8; busy: wait at 0x020B6A04
+#   otherwise: str cmd, [GXFIFO] ; bl MI_CpuSend32(params, GXFIFO, n * 4)
+# The hook does the append and the direct write natively (not on a stalled
+# FIFO, and for at most 32 parameters) and returns; the rest runs the guest
+# code. Handler: src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x020B6ADC      # function entry, before push {r4-r6, lr}
+mode = "arm"
+name = "Dq9GeBufferCommand"
+registers = ["r0", "r1", "r2"]
+on_true = "return"
+on_false = "continue"
+
+# Part 9: box-test culling. NNS model culling (0x0207E98C, and the two map
+# object paths at 0x02017218 and 0x0203F2C0) writes BOX_TEST, then spins:
+#   mov r0, rX ; bl G3X_GetBoxTestResult (0x020C56C0) ; cmp r0, #0 ; bne <mov>
+# G3X_GetBoxTestResult returns -1 while GXSTAT bit 0 is set. The hook, at
+# the loop head, has the scheduler hold the ARM9 until the test is done
+# (nds_title_wait_gx_test) rather than run thousands of polls a frame.
+# Handler: src/hooks/frame_rate.cpp.
+[[hook]]
+address = 0x020173F8      # mov r0, r8 (poll loop head)
+mode = "arm"
+name = "Dq9BoxTestWait"
+
+[[hook]]
+address = 0x0203F6F8      # mov r0, r6 (poll loop head)
+mode = "arm"
+name = "Dq9BoxTestWait"
+
+[[hook]]
+address = 0x0207EA14      # mov r0, r4 (poll loop head)
+mode = "arm"
+name = "Dq9BoxTestWait"
+
 # Right click = the message box's "next" key, like B (0x403 = A/B/X in the
 # check at 0x020440DC, which sets r5 = 1). The hook runs after the second key
 # test, before `cmp r0, #0` at 0x02044168. Handler: Dq9TextAdvanceRightClick

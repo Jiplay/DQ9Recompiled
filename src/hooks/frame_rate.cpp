@@ -346,3 +346,65 @@ NDS_TITLE_HOOK bool Dq9GxFifoSend(uint32_t* r0, uint32_t* r1, uint32_t* r2,
     *cpsr = (*cpsr & ~nzcv_mask) | CmpFlags(p, end);
     return true;
 }
+
+namespace {
+
+// Literal of 0x020B6ADC: the geometry command buffer's state,
+// {u32* buffer, u32 busy}. buffer[0] counts the words queued after it.
+constexpr uint32_t kGeBufferStateLiteral = 0x020B6BB8u;
+constexpr uint32_t kGeBufferWords = 0xC0u;
+// One command's parameters (MTX_LOAD_4x4 has 16, MTX_MULT_4x4 16, the
+// largest is 32): with the FIFO not stalled at entry, every entry written
+// past a stall fits in the engine's 64-entry stall queue.
+constexpr uint32_t kGeDirectMaxParams = 32u;
+
+}  // namespace
+
+// At the entry of NNS G3D's G3dGeBufferOP_N(cmd = r0, params = r1, n = r2),
+// 0x020B6ADC, before its push. With a buffer and busy set, it appends cmd and
+// the n parameter words when they fit in 0xC0 words; with no queued words
+// and busy clear it writes cmd to GXFIFO and sends the parameters through
+// MI_CpuSend32. Called for every geometry command of every model. At 60 FPS
+// the hook does those two paths natively and returns; a full buffer (flush
+// through 0x020B69A8), a busy wait (0x020B6A04), a stalled FIFO and longer
+// parameter lists run the guest code. r0-r3 and r12 are scratch for the
+// callers (compiled C); the result leaves r4-r6 untouched, as the pop would.
+NDS_TITLE_HOOK bool Dq9GeBufferCommand(uint32_t* r0, uint32_t* r1,
+                                       uint32_t* r2) {
+    if (!Fast()) return false;
+    const uint32_t cmd = *r0;
+    const uint32_t params = *r1;
+    const uint32_t n = *r2;
+    const uint32_t state = bus_read_u32(kGeBufferStateLiteral);
+    const uint32_t buffer = bus_read_u32(state);
+    const uint32_t busy = bus_read_u32(state + 4u);
+    if (buffer != 0u && busy != 0u) {
+        const uint32_t count = bus_read_u32(buffer);
+        if (count + 1u + n > kGeBufferWords) return false;
+        bus_write_u32(buffer, count + 1u);
+        bus_write_u32(buffer + (count + 1u) * 4u, cmd);
+        for (uint32_t i = 0u; i < n; ++i)
+            bus_write_u32(buffer + (count + 2u + i) * 4u,
+                          bus_read_u32(params + i * 4u));
+        if (n != 0u) bus_write_u32(buffer, count + 1u + n);
+        return true;
+    }
+    if (busy != 0u || n > kGeDirectMaxParams || nds_gxfifo_stalled())
+        return false;
+    if (buffer != 0u && bus_read_u32(buffer) != 0u) return false;  // flush
+    nds_gpu3d_write(kGxFifo, cmd, 4u);
+    for (uint32_t i = 0u; i < n; ++i)
+        nds_gpu3d_write(kGxFifo, bus_read_u32(params + i * 4u), 4u);
+    return true;
+}
+
+// At the head of the three box-test culling loops (0x020173F8, 0x0203F6F8,
+// 0x0207EA14), each `do r = G3X_GetBoxTestResult(&res); while (r != 0);`
+// right after the BOX_TEST write. The ARM9 spins there until the geometry
+// engine reaches the test, ~2,500 polls a frame in a town, each a call, a
+// dispatch and a GXSTAT read. At 60 FPS the hook has the scheduler hold the
+// ARM9 until the test is done instead (the same guest time passes); the
+// guest's next poll then reads the result.
+NDS_TITLE_HOOK void Dq9BoxTestWait() {
+    if (Fast()) nds_title_wait_gx_test();
+}
