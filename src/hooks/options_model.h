@@ -103,6 +103,7 @@ inline constexpr Placement kLayout[] = {
     {"audio.mute", "General"},
     {"netplay.enabled", "General"},
     {"netplay.account", "General"},  // only while a sign-in is wanted
+    {"display.fullscreen", "Display"},  // hidden on Android: always on
     {"title.fps_mode", "Display"},
     {"title.ui_size", "Display"},
     {"display.resolution_scale", "Display"},
