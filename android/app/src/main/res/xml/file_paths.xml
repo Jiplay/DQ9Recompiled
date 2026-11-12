@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- SelfUpdater::StagingRoot() under the app's internal files dir
+         (ndsrecomp/runner/src/update/self_update.h) -->
+    <files-path name="pending_update" path=".pending-self-update/" />
+</paths>

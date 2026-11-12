@@ -1,0 +1,368 @@
+name: Build DQ9Recomp
+
+on:
+  workflow_call:
+    inputs:
+      publish_mode:
+        description: "'artifact' for CI workflow-artifact, 'release' for GitHub release"
+        required: true
+        type: string
+      artifact_name:
+        description: "Artifact name prefix when publish_mode is 'artifact'"
+        required: false
+        type: string
+        default: ""
+      tag:
+        description: "Release tag to embed in release artifact filenames"
+        required: false
+        type: string
+        default: ""
+      upload_packages:
+        description: "In artifact mode, upload the packaged archives as release-* like a release does"
+        required: false
+        type: boolean
+        default: false
+env:
+  # The ROM is not in git: it comes from a release of a private repository
+  # (vars.ASSETS_REPO, read with secrets.ASSETS_TOKEN), checked against the
+  # SHA-1 scripts/build.py expects, and cached between runs.
+  ASSETS_REPO: ${{ vars.ASSETS_REPO }}
+  ASSETS_RELEASE: ${{ vars.ASSETS_RELEASE }}
+  ROM_PATH: dq9.nds
+  ROM_SHA1: ff761d349709f329c8ac4bd0023fdce21861e8a1
+  ROM_CACHE_KEY: dq9-rom-v1
+  SDL3_VERSION: "3.2.10"
+  # The runner has no Android build yet (see android/app/build.gradle.kts):
+  # the android-arm64 leg only runs its steps once vars.ANDROID_BUILD is
+  # 'true'.
+  ANDROID_BUILD: ${{ vars.ANDROID_BUILD == 'true' }}
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      # `platform` names the release asset, so it has to match
+      # nds::update::HostPlatformId() (ndsrecomp/runner/src/update) for the
+      # self-updater.
+      matrix:
+        include:
+          - platform: win-amd64
+            runner: windows-latest
+
+          - platform: linux-amd64
+            runner: ubuntu-24.04
+
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+
+          - platform: mac-amd64
+            runner: macos-26-intel
+
+          - platform: mac-arm64
+            runner: macos-26
+
+          - platform: android-arm64
+            runner: ubuntu-24.04
+            ndk_version: "27.0.12077973"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          # ndsrecomp and its submodules may be private: a token that can
+          # read them, else the workflow's own.
+          token: ${{ secrets.SUBMODULES_TOKEN || github.token }}
+          # The release version (and the Android versionCode/versionName)
+          # comes from the newest reachable v* tag, which a default shallow
+          # checkout does not fetch.
+          fetch-tags: true
+          fetch-depth: 0
+
+      - name: Skip (Android build not enabled)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD != 'true'
+        run: echo "::notice::android-arm64 skipped; set the ANDROID_BUILD repository variable to 'true' once the runner builds for Android."
+
+      - name: Install dependencies (Linux)
+        if: startsWith(matrix.platform, 'linux')
+        run: |
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 20
+          sudo apt-get install -y ninja-build python3-venv libcurl4-openssl-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
+            libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols \
+            libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev \
+            libibus-1.0-dev libdecor-0-dev
+
+      - name: Install dependencies (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        run: |
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 20
+          sudo apt-get install -y ninja-build python3-venv
+
+      - name: Install dependencies (macOS)
+        if: startsWith(matrix.platform, 'mac-')
+        run: brew install cmake ninja
+
+      - name: Install LLVM, CMake, Ninja (Windows)
+        if: matrix.platform == 'win-amd64'
+        run: choco install llvm cmake ninja -y
+
+      - name: Install Android NDK
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        run: |
+          SDKMANAGER="$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"
+          "$SDKMANAGER" --install "ndk;${{ matrix.ndk_version }}"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ matrix.ndk_version }}" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17 (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Set up sccache
+        if: matrix.platform != 'android-arm64' || env.ANDROID_BUILD == 'true'
+        uses: hendrikmuhs/ccache-action@v1.2.22
+        with:
+          variant: sccache
+          key: ${{ matrix.platform }}
+
+      # SDL3 is built from source on every platform: Ubuntu 24.04 packages
+      # none, and a static library keeps the release free of a runtime
+      # dependency. Android gets a shared libSDL3.so plus the Java glue the
+      # APK compiles (android/app/build.gradle.kts).
+      - name: Cache SDL3
+        if: matrix.platform != 'android-arm64' || env.ANDROID_BUILD == 'true'
+        id: sdl3-cache
+        uses: actions/cache@v5
+        with:
+          path: build-sdl3/install
+          key: sdl3-${{ env.SDL3_VERSION }}-${{ matrix.platform }}-v1
+
+      - name: Fetch SDL3 source
+        if: matrix.platform != 'android-arm64' || env.ANDROID_BUILD == 'true'
+        shell: bash
+        run: git clone --depth 1 --branch "release-${SDL3_VERSION}" https://github.com/libsdl-org/SDL.git build-sdl3/SDL
+
+      - name: Build SDL3 (desktop)
+        if: matrix.platform != 'android-arm64' && steps.sdl3-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          cmake -S build-sdl3/SDL -B build-sdl3/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TEST_LIBRARY=OFF -DSDL_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PWD/build-sdl3/install"
+          cmake --build build-sdl3/build --parallel
+          cmake --install build-sdl3/build
+
+      - name: Build SDL3 (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true' && steps.sdl3-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          cmake -S build-sdl3/SDL -B build-sdl3/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=28 \
+            -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST_LIBRARY=OFF -DSDL_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PWD/build-sdl3/install"
+          cmake --build build-sdl3/build --parallel
+          cmake --install build-sdl3/build
+
+      - name: Locate SDL3
+        if: matrix.platform != 'android-arm64' || env.ANDROID_BUILD == 'true'
+        shell: bash
+        run: |
+          config="$(find "$PWD/build-sdl3/install" -name SDL3Config.cmake | head -1)"
+          dir="$(dirname "$config")"
+          # Git Bash paths (/d/a/...) mean nothing to CMake or Python on Windows.
+          if command -v cygpath >/dev/null; then dir="$(cygpath -m "$dir")"; fi
+          echo "SDL3_DIR=$dir" >> "$GITHUB_ENV"
+          echo "SDL3_JAVA_DIR=$PWD/build-sdl3/SDL/android-project/app/src/main/java" >> "$GITHUB_ENV"
+
+      - name: Cache the ROM
+        if: matrix.platform != 'android-arm64' || env.ANDROID_BUILD == 'true'
+        id: rom-cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.ROM_PATH }}
+          key: ${{ env.ROM_CACHE_KEY }}
+
+      # On a cold cache every matrix leg asks the assets repository at once,
+      # and the burst can trip a 403 on whichever request lands last. Retry
+      # with a backoff rather than serialising the legs.
+      - name: Fetch the ROM
+        if: (matrix.platform != 'android-arm64' || env.ANDROID_BUILD == 'true') && steps.rom-cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ASSETS_TOKEN }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if gh release download ${ASSETS_RELEASE:+"$ASSETS_RELEASE"} \
+                --repo "$ASSETS_REPO" --pattern "$ROM_PATH" --clobber; then
+              break
+            fi
+            echo "Attempt $attempt failed; retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          python3 - <<'EOF'
+          import hashlib, os, sys
+          path = os.environ["ROM_PATH"]
+          if not os.path.exists(path):
+              sys.exit(f"{path} could not be fetched")
+          digest = hashlib.sha1(open(path, "rb").read()).hexdigest()
+          if digest != os.environ["ROM_SHA1"]:
+              os.remove(path)
+              sys.exit(f"{path} has SHA-1 {digest}, expected {os.environ['ROM_SHA1']}")
+          print(f"Fetched {path} ({os.path.getsize(path)} bytes)")
+          EOF
+
+      - name: Build (desktop)
+        if: matrix.platform != 'android-arm64'
+        shell: bash
+        env:
+          # Version the self-updater compares releases against; empty for CI
+          # artifact builds, where CMake falls back to the newest reachable tag.
+          NDS_VERSION_NAME: ${{ inputs.tag }}
+        run: python scripts/build.py --release --jobs 4 --sdl3-dir "$SDL3_DIR"
+
+      # Android: the banks are generated on the host, then the runner is
+      # cross-compiled with the NDK as libnds_runner.so.
+      - name: Generate banks (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        shell: bash
+        run: python scripts/build.py --release --jobs 4 --banks-only
+
+      - name: Build the runner (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        shell: bash
+        env:
+          NDS_VERSION_NAME: ${{ inputs.tag }}
+        run: |
+          hooks="$(ls "$PWD"/src/hooks/*.cpp | sort | paste -sd ';' -)"
+          cmake -G Ninja -S ndsrecomp/runner -B build-android \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=28 \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DSDL3_DIR="$SDL3_DIR" \
+            -DNDS_BOOTSTRAP_FIRMWARE=ON \
+            -DNDS_TITLE_BANK_DIR="$PWD/generated/recomp" \
+            -DNDS_TITLE_ROM_SHA1="$ROM_SHA1" \
+            -DNDS_TITLE_CONFIG="$PWD/game.toml" \
+            -DNDS_INTERPRETER=OFF -DNDS_RETAIL_BIOS_BANKS=OFF -DNDS_EMBED_DUMPS_DIR= \
+            -DNDS_ONLINE=OFF \
+            -DNDS_UPDATE_REPO=birabittoh/DQ9Recompiled \
+            "-DNDS_UPDATE_ASSET_FORMAT=DQ9Recomp-{tag}-{platform}" \
+            "-DNDS_TITLE_HOOK_SOURCES=$hooks"
+          cmake --build build-android --parallel 4 --target nds_runner
+
+      - name: sccache stats
+        if: always()
+        shell: bash
+        run: sccache --show-stats || true
+
+      - name: Package (desktop)
+        if: matrix.platform != 'android-arm64' && !startsWith(matrix.platform, 'mac-')
+        shell: bash
+        run: |
+          if [ "${{ inputs.publish_mode }}" = "artifact" ]; then
+            out="${{ inputs.artifact_name }}-${{ matrix.platform }}"
+          else
+            out="DQ9Recomp-${{ inputs.tag }}-${{ matrix.platform }}"
+          fi
+          python scripts/build.py --package "${out}"
+
+      # macOS gets a .app inside a .dmg rather than a tar.gz: the updater
+      # swaps the bundle whole, which keeps its code signature valid, and a
+      # disk image is what lets the user drag the app out to /Applications,
+      # which also frees it from App Translocation. See scripts/package-mac.py.
+      - name: Package (macOS)
+        if: startsWith(matrix.platform, 'mac-')
+        shell: bash
+        run: |
+          if [ "${{ inputs.publish_mode }}" = "artifact" ]; then
+            out="${{ inputs.artifact_name }}-${{ matrix.platform }}"
+            version="0.0.0"
+          else
+            out="DQ9Recomp-${{ inputs.tag }}-${{ matrix.platform }}"
+            version="$(echo "${{ inputs.tag }}" | sed 's/^v//')"
+          fi
+          python scripts/package-mac.py --name "${out}" --version "${version}"
+
+      # Without this the APK is debug-signed with the runner's throwaway key,
+      # so it cannot be installed over a locally built one (and vice versa),
+      # which is what the self-updater asks the package installer to do.
+      - name: Restore sideload signing keystore (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.DQ9_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::DQ9_KEYSTORE_BASE64 is not set; the APK will be debug-signed and will not install over a sideload-signed build."
+            exit 0
+          fi
+          mkdir -p android/keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > android/keystore/sideload.jks
+          echo "Restored android/keystore/sideload.jks ($(wc -c < android/keystore/sideload.jks) bytes)"
+
+      - name: Package (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        shell: bash
+        env:
+          # Empty for CI artifact builds, where Gradle falls back to the newest
+          # reachable tag.
+          NDS_VERSION_NAME: ${{ inputs.tag }}
+          DQ9_KEYSTORE_PASSWORD: ${{ secrets.DQ9_KEYSTORE_PASSWORD }}
+          DQ9_KEY_ALIAS: ${{ secrets.DQ9_KEY_ALIAS }}
+          DQ9_KEY_PASSWORD: ${{ secrets.DQ9_KEY_PASSWORD }}
+        run: |
+          if [ "${{ inputs.publish_mode }}" = "artifact" ]; then
+            name="${{ inputs.artifact_name }}-${{ matrix.platform }}"
+          else
+            name="DQ9Recomp-${{ inputs.tag }}-${{ matrix.platform }}"
+          fi
+
+          JNI_DIR="$PWD/android/app/jniLibs/arm64-v8a"
+          mkdir -p "$JNI_DIR"
+          cp -v build-android/libnds_runner.so "$JNI_DIR/"
+          cp -v "$(find build-sdl3/install -name libSDL3.so | head -1)" "$JNI_DIR/"
+          echo "=== Staged jniLibs ==="
+          ls -lh "$JNI_DIR/"
+
+          # Signed with the sideload key when the keystore was restored above,
+          # otherwise debug-signed.
+          cd android
+          gradle assembleRelease --no-daemon
+
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          mkdir -p ../pkg
+          cp "$APK" "../pkg/${name}.apk"
+          echo "ARTIFACT_PATH=pkg/${name}.apk" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=${name}" >> "$GITHUB_ENV"
+
+      - name: Upload CI artifact
+        if: inputs.publish_mode == 'artifact' && !inputs.upload_packages && (matrix.platform != 'android-arm64' || env.ANDROID_BUILD == 'true')
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: pkg/
+          if-no-files-found: error
+
+      - name: Upload release artifact
+        if: (inputs.publish_mode == 'release' || inputs.upload_packages) && (matrix.platform != 'android-arm64' || env.ANDROID_BUILD == 'true')
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-${{ matrix.platform }}
+          path: ${{ env.ARTIFACT_PATH }}
+          if-no-files-found: error

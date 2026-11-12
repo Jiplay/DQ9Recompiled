@@ -48,6 +48,16 @@ next to the executable if a `portable.txt` file is there:
 
 Logs always go to `logs/` next to the executable.
 
+### Updates
+
+A release build shows its version in the bottom-left corner of the title
+menu and checks [the releases](https://github.com/birabittoh/DQ9Recompiled/releases)
+quietly at startup. When a newer one is out, the title menu gets an
+**Update to** row: it downloads the release, checks it against GitHub's
+checksum, replaces the files next to the executable and restarts into the new
+version (on Android it opens the system installer). Saves and settings live in
+the data folder and are left alone.
+
 ### Multiplayer
 
 On first launch Windows asks whether to let the game through its firewall;
@@ -84,6 +94,18 @@ Put your ROM in the repository root as `dq9.nds`, then:
 ```bash
 python3 scripts/build.py
 ```
+
+`python3 scripts/build.py --package` then packs the build as the release asset
+the updater looks for (`DQ9Recomp-<tag>-<platform>.zip`, `.tar.gz` on Linux,
+`.dmg` on macOS). The version a build compares releases against is the newest
+`v*` tag (or `--version X.Y.Z`, or `NDS_VERSION_NAME`); with none, the updater
+is off.
+
+Pushing a `v*` tag builds every platform and publishes a release
+(`.github/workflows/release.yml`). The workflows need the ROM, which is not in
+git: put `dq9.nds` in a release of a private repository and set the
+`ASSETS_REPO` variable (`owner/name`) and the `ASSETS_TOKEN` secret (a token
+that can read it).
 
 If you already cloned without `--recursive`, run
 `git submodule update --init --recursive` first.

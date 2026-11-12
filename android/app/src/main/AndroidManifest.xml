@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Netplay lobbies and the self-updater's release check and download -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The self-updater hands the downloaded APK to the system installer -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Touch drives the bottom screen, but a gamepad works without one -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+
+    <application
+        android:label="DQ9Recomp"
+        android:hasCode="true"
+        android:appCategory="game"
+        android:isGame="true">
+
+        <!-- DQ9RecompActivity extends SDL3's SDLActivity and names the native
+             libraries to load (see getLibraries()). -->
+        <activity
+            android:name="com.birabittoh.dq9recomp.DQ9RecompActivity"
+            android:label="DQ9Recomp"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode"
+            android:screenOrientation="sensor"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Tells SDL's Android glue which symbol is the entry point -->
+            <meta-data android:name="SDL_MAIN_ENTRY_FUNCTION" android:value="SDL_main" />
+        </activity>
+
+        <!-- Serves the staged update APK to the package installer; the
+             self-updater looks this authority up by name
+             (ndsrecomp/runner/src/update/self_update_android.cpp). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+
+</manifest>

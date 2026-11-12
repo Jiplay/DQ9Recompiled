@@ -24,6 +24,16 @@
 // adds, and laid out with the others when the menu opens its panel. It
 // runs the Options row's handler too, which asks the frontend for the file
 // dialog (title_save.h); an imported save resets the console.
+//
+// The self-updater (title_update.h) adds two things the same way. When a
+// newer release is out, an "Update to <version>" row goes below Options,
+// made by the same builder hook and laid out with the others; choosing it
+// asks the frontend to download and stage the update, and the handler then
+// keeps the menu waiting (as the running handler, like an open page) until
+// the frontend restarts into the new version, hands it to the package
+// installer (Android) or reports a failure. And this build's version is
+// shown in the bottom-left corner, in a small window of the pages' panel
+// (212, closed while the main menu is up) opened by the builder hook too.
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -36,6 +46,7 @@
 #include "options_model.h"
 #include "save_image.h"
 #include "title_save.h"
+#include "title_update.h"
 
 namespace {
 
@@ -159,6 +170,28 @@ constexpr uint32_t kPageWidth = 30u;  // tiles
 constexpr uint32_t kPageVram = 96u;   // as the game opens 212 and 210
 // The save row's cell: past the pages' (110..120), in the rows' group.
 constexpr uint32_t kSaveCell = kFirstDescCell + kDescLines;
+
+// The update row's cell, after the save row's, and its string (free memory
+// above, below the descriptions' strings).
+constexpr uint32_t kUpdateCell = kSaveCell + 1u;
+constexpr uint32_t kUpdateRowText = 0x02183C80u;
+constexpr uint32_t kUpdateRowTextSize = 0x60u;
+
+// The version line: one cell in the pages' panel (212), which the builder
+// hook opens as a small window in the bottom-left corner while the main
+// menu is up. The save summary (211) starts at tile column 6 from row 12
+// down to the bottom (0x0216C6FC opens it at x 6, width 26), so the window
+// stays in columns 0..5. Its tiles go at the top of the room the game gives
+// panel 212 (up to 32 x 24 tiles from 96), past what the main menu (210) and
+// the summary (211) use.
+constexpr uint32_t kVersionCell = kUpdateCell + 1u;
+constexpr uint32_t kVersionText = 0x02183C40u;
+constexpr uint32_t kVersionTextSize = 0x40u;
+constexpr uint32_t kVersionX = 0u, kVersionY = 21u;  // tiles
+constexpr uint32_t kVersionWidth = 6u, kVersionHeight = 3u;
+constexpr uint32_t kVersionVram =
+    kPageVram + 32u * 24u * 32u - kVersionWidth * kVersionHeight * 32u;
+constexpr int kVersionCellX = 4, kVersionCellY = 6;  // pixels in the window
 
 // ---- Calling guest code from the hook -----------------------------------
 
@@ -353,8 +386,12 @@ void Open(uint32_t scene) {
         const bool main_row =
             bus_read_u16(w + kWidgetType) == kTypeCell &&
             bus_read_u16(w + kCellLayer) == kMainMenuLayer &&
-            (id < kFirstCell || id == kSaveCell);
-        if (bus_read_u16(w + kWidgetGroup) == kFileInfoGroup || main_row)
+            (id < kFirstCell || id == kSaveCell || id == kUpdateCell);
+        // The version line is drawn in the page's own panel.
+        const bool version = id == kVersionCell &&
+            bus_read_u16(w + kWidgetType) == kTypeCell;
+        if (bus_read_u16(w + kWidgetGroup) == kFileInfoGroup || main_row ||
+            version)
             bus_write_u8(w + kWidgetFlags,
                          bus_read_u8(w + kWidgetFlags) | kHidden);
     }
@@ -397,6 +434,86 @@ void Close() {
     });
 }
 
+// ---- The update row -----------------------------------------------------
+
+// While an update the update row asked for is on its way, the handler stays
+// the scene's running handler, which keeps the menu from taking input: the
+// frontend shows the download's progress, then restarts into the new
+// version (the game's process ends) or, on Android, hands it to the
+// package installer, and a failure is shown as a notice. Either of the
+// last two gives the menu back.
+struct UpdateWait {
+    bool waiting = false;
+    bool busy_seen = false;  // the frontend took the request
+    uint32_t frames = 0;
+};
+
+UpdateWait g_update;
+
+// Frames to wait for the frontend to take the request (it does on its next
+// host frame) before giving up, e.g. in a run with no frontend.
+constexpr uint32_t kUpdateStartFrames = 300;
+
+// The row's version, when a newer release is out and the update row has
+// something to offer.
+std::string UpdateRowVersion() {
+    const NdsTitleUpdateStatus status = nds_title_update_status();
+    switch (status.state) {
+    case NdsTitleUpdateState::Available:
+    case NdsTitleUpdateState::Downloading:
+    case NdsTitleUpdateState::Failed:
+        return status.available_version;
+    default:
+        return {};
+    }
+}
+
+// "Update to <version>", in the language the game shows its text in.
+std::string UpdateRowText(const std::string& version) {
+    std::string text = dq9::Tr("main_menu", "update",
+                               bus_read_u8(dq9::kGameTextLanguage));
+    const size_t at = text.find("{}");
+    if (at != std::string::npos) text.replace(at, 2, version);
+    return text;
+}
+
+// The main menu's update row was chosen: ask for the update and wait.
+bool UpdateRowChosen(uint32_t scene) {
+    const uint32_t grid = FindTyped(
+        scene, bus_read_u16(scene + kSceneActiveGrid), kTypeGrid);
+    if (!grid || bus_read_u32(grid + kGridCells) != kMainGridArray)
+        return false;
+    const uint32_t row = bus_read_u16(grid + kGridRow);
+    if (row >= bus_read_u16(grid + kGridRows) ||
+        bus_read_u16(kMainGridArray + 2u * row) != kUpdateCell)
+        return false;
+    if (!UpdateRowVersion().empty()) {
+        nds_title_update_install();
+        g_update = UpdateWait{};
+        g_update.waiting = true;
+    }
+    return true;
+}
+
+// Once per frame while waiting for the update.
+void UpdateFrame(uint32_t scene) {
+    bus_write_u32(scene + kSceneIdleTime, 0u);
+    const NdsTitleUpdateStatus status = nds_title_update_status();
+    const bool busy = status.state == NdsTitleUpdateState::Downloading ||
+                      status.state == NdsTitleUpdateState::Applying;
+    if (busy) g_update.busy_seen = true;
+    ++g_update.frames;
+    // Applying on desktop ends the process: keep waiting for it. On
+    // Android the installer is up and the game goes on behind it.
+    const bool restarting =
+        status.state == NdsTitleUpdateState::Applying && status.restarts;
+    const bool done = g_update.busy_seen ? !busy || (!status.restarts &&
+                                                     status.state ==
+                                                         NdsTitleUpdateState::Applying)
+                                         : g_update.frames > kUpdateStartFrames;
+    if (done && !restarting) g_update = UpdateWait{};
+}
+
 // The main menu's save row was chosen: ask for the dialog.
 bool SaveRowChosen(uint32_t scene) {
     const uint32_t grid = FindTyped(
@@ -430,8 +547,11 @@ void Event(uint32_t scene) {
         g_menu.open = false;
         if (stale) return;
     }
+    // An event while waiting for an update means the scene stopped running
+    // the handler (a reset, another screen): the wait is over.
+    if (g_update.waiting) g_update = UpdateWait{};
     if (!g_menu.open) {
-        if (!SaveRowChosen(scene)) Open(scene);
+        if (!SaveRowChosen(scene) && !UpdateRowChosen(scene)) Open(scene);
         return;
     }
     const uint32_t held = bus_read_u16(kPadHeld);
@@ -479,6 +599,10 @@ void Event(uint32_t scene) {
 // running handler): follow the cursor with the description, and keep the
 // title from going back to the logos while the player reads the options.
 void Frame(uint32_t scene) {
+    if (g_update.waiting) {
+        UpdateFrame(scene);
+        return;
+    }
     if (!g_menu.open) return;
     if (scene != g_menu.scene || !PageShown(scene)) {
         RestoreGrid();
@@ -537,7 +661,9 @@ NDS_TITLE_HOOK bool Dq9OptionsMenu(uint32_t* r0, uint32_t* r1, uint32_t* r2,
             Frame(scene);
         else
             Event(scene);
-        Then([](uint32_t) { g_driver.result = g_menu.open ? 1u : 0u; });
+        Then([](uint32_t) {
+            g_driver.result = g_menu.open || g_update.waiting ? 1u : 0u;
+        });
     }
     while (!d.queue.empty()) {
         GuestCall call = std::move(d.queue.front());
@@ -567,86 +693,163 @@ NDS_TITLE_HOOK bool Dq9OptionsMenu(uint32_t* r0, uint32_t* r1, uint32_t* r2,
     return false;
 }
 
-// ---- The save row -------------------------------------------------------
+// ---- The save row, the update row and the version line -----------------
 
 namespace {
 
-// The call to 0x0216AFB0 the rows' builder hook makes before the builder
-// runs: the builder's own registers, given back when the call returns.
-struct SaveRowCall {
+// The calls the rows' builder hook makes before the builder runs (the
+// rows' cells, the version line's window), and the builder's own
+// registers, given back when the last call returns.
+struct BuilderCalls {
     bool waiting = false;
+    uint32_t scene = 0;
     uint32_t r[4] = {}, sp = 0, lr = 0, call_sp = 0;
+    std::deque<GuestCall> queue;
+    std::function<void(uint32_t)> then;
 };
 
-SaveRowCall g_save_row;
+BuilderCalls g_builder;
 
-// The main menu's rows top to bottom, the save row's included, or none in
-// a mode without one.
-std::vector<uint32_t> MainRows(uint8_t mode) {
+// The main menu's rows top to bottom, the save row's included, and the
+// update row's when `update`, or none in a mode without them.
+std::vector<uint32_t> MainRows(uint8_t mode, bool update) {
+    std::vector<uint32_t> rows;
     if (mode == 1u || mode == 5u)
-        return {kMainCells[0], kMainCells[1], kSaveCell, kMainCells[2]};
-    if (mode == 2u) return {kMainCells[0], kSaveCell, kMainCells[1]};
-    return {};
+        rows = {kMainCells[0], kMainCells[1], kSaveCell, kMainCells[2]};
+    else if (mode == 2u)
+        rows = {kMainCells[0], kSaveCell, kMainCells[1]};
+    if (!rows.empty() && update) rows.push_back(kUpdateCell);
+    return rows;
+}
+
+// Points cell `id`'s text at `address`, holding `text`.
+void SetCellText(uint32_t scene, uint32_t id, uint32_t address, uint32_t size,
+                 const std::string& text) {
+    if (const uint32_t cell = FindTyped(scene, id, kTypeCell)) {
+        WriteString(address, size, text);
+        bus_write_u32(cell + kCellText, address);
+    }
+}
+
+// What the builder hook asks of the game for rows `rows`: the save row's
+// cell, the update row's when an update is out, and the version line.
+void QueueBuilderCalls(uint32_t scene, uint32_t rows) {
+    std::deque<GuestCall>& q = g_builder.queue;
+    const uint32_t language = bus_read_u8(dq9::kGameTextLanguage);
+
+    // 0x0216AFB0(scene, cell, group, layer, text, x, y, 10, enabled); the
+    // layout hook below places the rows.
+    if (!FindWidget(scene, kSaveCell)) {
+        q.push_back({kFnNewCell,
+                     {scene, kSaveCell, kCellGroup, kMainMenuLayer, kTextRowsId,
+                      static_cast<uint32_t>(kRowX), 0u, 10u, 1u},
+                     [scene, rows, language](uint32_t) {
+                         SetCellText(scene, kSaveCell, kSaveRowText, kSaveRowTextSize,
+                                     rows == 2u
+                                         ? dq9::Tr("main_menu", "import_save", language)
+                                         : dq9::Tr("main_menu", "export_save", language));
+                     }});
+    }
+    const std::string update = UpdateRowVersion();
+    if (!update.empty() && !FindWidget(scene, kUpdateCell)) {
+        q.push_back({kFnNewCell,
+                     {scene, kUpdateCell, kCellGroup, kMainMenuLayer, kTextRowsId,
+                      static_cast<uint32_t>(kRowX), 0u, 10u, 1u},
+                     [scene, update](uint32_t) {
+                         SetCellText(scene, kUpdateCell, kUpdateRowText,
+                                     kUpdateRowTextSize, UpdateRowText(update));
+                     }});
+    }
+
+    const std::string version = nds_title_update_status().current_version;
+    const uint32_t panel = FindTyped(scene, kPagePanel, kTypePanel);
+    if (version.empty() || !panel) return;
+    if (!FindWidget(scene, kVersionCell)) {
+        q.push_back({kFnNewCell,
+                     {scene, kVersionCell, kCellGroup, kPagePanel, kTextRowsId,
+                      static_cast<uint32_t>(kVersionCellX),
+                      static_cast<uint32_t>(kVersionCellY), 10u, 1u},
+                     nullptr});
+    }
+    // The text, and the window that draws it, once the cell exists.
+    q.push_back({0u, {}, [scene, version](uint32_t) {
+        SetCellText(scene, kVersionCell, kVersionText, kVersionTextSize, "v" + version);
+        // Shown again if a page hid it and the scene left without closing.
+        if (const uint32_t cell = FindTyped(scene, kVersionCell, kTypeCell))
+            bus_write_u8(cell + kWidgetFlags, bus_read_u8(cell + kWidgetFlags) & ~kHidden);
+    }});
+    q.push_back({kFnPanelClose, {panel}, nullptr});
+    q.push_back({kFnPanelOpen,
+                 {panel, scene, kVersionVram, kVersionX, kVersionY, kVersionWidth,
+                  kVersionHeight, 0u, 1u, 0u},
+                 nullptr});
 }
 
 }  // namespace
 
 // The entry of the main menu's rows builder 0x0216B498 (r0 = the scene,
 // r1 = which rows): with rows 1 (a save) or 2 (no save), first make the
-// save row's cell. True: call *r12 (the hook jumps to a `bx r12`) with
-// lr = this instruction, which brings the call back here. False: run the
-// builder, with the registers it was called with.
+// save row's cell, the update row's and the version line's, and open the
+// version line's window. True: call *r12 (the hook jumps to a `bx r12`)
+// with lr = this instruction, which brings each call back here. False: run
+// the builder, with the registers it was called with.
 NDS_TITLE_HOOK bool Dq9SaveRowCell(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                    uint32_t* r3, uint32_t* r12, uint32_t* sp,
                                    uint32_t* lr) {
-    SaveRowCall& c = g_save_row;
+    BuilderCalls& c = g_builder;
     uint32_t* const regs[] = {r0, r1, r2, r3};
     if (c.waiting && *sp == c.call_sp) {
         c.waiting = false;
+        if (auto then = std::move(c.then)) then(*r0);
+    } else {
+        c = BuilderCalls{};
+        if (*r1 != 1u && *r1 != 2u) return false;
+        c.scene = *r0;
+        for (size_t i = 0; i < 4; ++i) c.r[i] = *regs[i];
+        c.sp = *sp;
+        c.lr = *lr;
+        c.call_sp = (*sp - 0x40u) & ~7u;
+        QueueBuilderCalls(*r0, *r1);
+    }
+    while (!c.queue.empty()) {
+        GuestCall call = std::move(c.queue.front());
+        c.queue.pop_front();
+        if (!call.target) {
+            if (call.then) call.then(0u);
+            continue;
+        }
+        for (size_t i = 0; i < 4; ++i)
+            *regs[i] = i < call.args.size() ? call.args[i] : 0u;
+        for (size_t i = 4; i < call.args.size(); ++i)
+            bus_write_u32(c.call_sp + 4u * static_cast<uint32_t>(i - 4),
+                          call.args[i]);
+        *sp = c.call_sp;
+        *lr = kFnRows;
+        *r12 = call.target;
+        c.then = std::move(call.then);
+        c.waiting = true;
+        return true;
+    }
+    if (c.scene) {
         for (size_t i = 0; i < 4; ++i) *regs[i] = c.r[i];
         *sp = c.sp;
         *lr = c.lr;
-        if (const uint32_t cell = FindTyped(*r0, kSaveCell, kTypeCell)) {
-            const uint32_t language = bus_read_u8(dq9::kGameTextLanguage);
-            WriteString(kSaveRowText, kSaveRowTextSize,
-                        *r1 == 2u
-                            ? dq9::Tr("main_menu", "import_save", language)
-                            : dq9::Tr("main_menu", "export_save", language));
-            bus_write_u32(cell + kCellText, kSaveRowText);
-        }
-        return false;
     }
-    c.waiting = false;
-    if ((*r1 != 1u && *r1 != 2u) || FindWidget(*r0, kSaveCell)) return false;
-    for (size_t i = 0; i < 4; ++i) c.r[i] = *regs[i];
-    c.sp = *sp;
-    c.lr = *lr;
-    c.call_sp = (*sp - 0x40u) & ~7u;
-    // 0x0216AFB0(scene, cell, group, layer, text, x, y, 10, enabled); the
-    // layout hook below places it.
-    const uint32_t stack[] = {kTextRowsId, static_cast<uint32_t>(kRowX), 0u,
-                              10u, 1u};
-    for (size_t i = 0; i < 5; ++i)
-        bus_write_u32(c.call_sp + 4u * static_cast<uint32_t>(i), stack[i]);
-    *r1 = kSaveCell;
-    *r2 = kCellGroup;
-    *r3 = kMainMenuLayer;
-    *sp = c.call_sp;
-    *lr = kFnRows;
-    *r12 = kFnNewCell;
-    c.waiting = true;
-    return true;
+    c = BuilderCalls{};
+    return false;
 }
 
 // Before the main menu opens its panel (0x021F7EB8, r1 = the scene, the
 // height at [sp+8]; r7 = the width, r5 the panel's VRAM base, to which the
 // menu adds width * height * 32 for the save summary's panel after the
-// call): spread the rows over a panel two tiles taller with the save row
-// above Options, and give the grid the rows in that order.
+// call): spread the rows over a taller panel with the save row above
+// Options and the update row, if any, at the bottom, and give the grid the
+// rows in that order.
 NDS_TITLE_HOOK void Dq9SaveRowLayout(uint32_t* r1, uint32_t* r5, uint32_t* r7,
                                      uint32_t* sp) {
     const uint32_t scene = *r1;
-    const std::vector<uint32_t> ids = MainRows(bus_read_u8(kMenuMode));
+    const std::vector<uint32_t> ids =
+        MainRows(bus_read_u8(kMenuMode), FindWidget(scene, kUpdateCell) != 0);
     const uint32_t grid = FindTyped(
         scene, bus_read_u16(scene + kSceneActiveGrid), kTypeGrid);
     if (ids.empty() || !grid) return;
@@ -657,15 +860,18 @@ NDS_TITLE_HOOK void Dq9SaveRowLayout(uint32_t* r1, uint32_t* r5, uint32_t* r7,
         cells.push_back(cell);
     }
     const uint32_t count = static_cast<uint32_t>(ids.size());
-    // As the game's three rows in six tiles; four rows get eight.
-    const uint32_t height = count == 4u ? 8u : 6u;
-    const int top = count == 4u ? 8 : 6;
+    // As the game's three rows in six tiles; four rows get eight, five ten
+    // (rows 1 to 10, clear of the summary from row 12).
+    const uint32_t height = count == 5u ? 10u : count == 4u ? 8u : 6u;
+    const int top = count == 5u ? 9 : count == 4u ? 8 : 6;
     for (uint32_t i = 0; i < count; ++i) {
         bus_write_u16(cells[i] + kCellY,
                       static_cast<uint16_t>(top + kRowPitch * static_cast<int>(i)));
         bus_write_u16(kMainGridArray + 2u * i, static_cast<uint16_t>(ids[i]));
+        // Our rows run the Options row's handler, which tells them apart.
+        if (ids[i] == kSaveCell || ids[i] == kUpdateCell)
+            bus_write_u16(cells[i] + kCellAction, kOptionsHandler);
     }
-    bus_write_u16(cells[count == 4u ? 2u : 1u] + kCellAction, kOptionsHandler);
     bus_write_u32(grid + kGridCells, kMainGridArray);
     bus_write_u16(grid + kGridRows, static_cast<uint16_t>(count));
     bus_write_u16(grid + kGridCols, 1u);

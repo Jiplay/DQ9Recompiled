@@ -4,6 +4,7 @@ name = "Italiano"
 options = "Opzioni"
 import_save = "Importa salvataggio"
 export_save = "Esporta salvataggio"
+update = "Aggiorna a {}"
 
 [camp_menu]
 options_description = "Modifica le impostazioni di schermo, audio, comandi e gioco."

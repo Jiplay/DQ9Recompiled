@@ -18,6 +18,13 @@ BANK_BUILD_DIR = "build"
 RUNNER_BUILD_DIR = "build-runner"
 RECOMP_NET_DIR = "recomp-net"
 
+# The self-updater checks UPDATE_REPO's latest GitHub release for an asset
+# named ASSET_FORMAT ({tag} the release tag, {platform} platform_id()) plus
+# .zip (Windows), .tar.gz (Linux), .dmg (macOS) or .apk (Android); the
+# release workflow uploads them under these names.
+UPDATE_REPO = "birabittoh/DQ9Recompiled"
+ASSET_FORMAT = PROJECT_NAME + "-{tag}-{platform}"
+
 # The runner always links the recompiled FreeBIOS banks, which are not part of
 # DQ9_BANKS: ndsrecomp ships their configs and images, and nds_recompile (built
 # with the banks above) turns them into ndsrecomp/generated/*.c.
@@ -41,6 +48,45 @@ def run(args, check=True, **kwargs):
     if result.returncode != 0 and check:
         sys.exit(result.returncode)
     return result
+
+
+def platform_id():
+    """The {platform} of a release asset, as the updater computes it."""
+    os_name = platform.system()
+    if os_name == "Windows":
+        os_id = "win"
+    elif os_name == "Darwin":
+        os_id = "mac"
+    elif os_name == "Linux":
+        os_id = "linux"
+    else:
+        die(f"unsupported OS: {os_name}")
+    arch = platform.machine().lower()
+    if arch in ("x86_64", "amd64"):
+        arch_id = "amd64"
+    elif arch in ("aarch64", "arm64"):
+        arch_id = "arm64"
+    else:
+        die(f"unsupported architecture: {arch}")
+    return f"{os_id}-{arch_id}"
+
+
+def release_tag():
+    """The release tag a build is stamped with: NDS_VERSION_NAME (set by the
+    release workflow), else the newest v* tag, else "" (as the runner's
+    CMake derives NDS_RELEASE_VERSION)."""
+    tag = os.environ.get("NDS_VERSION_NAME", "")
+    if not tag:
+        result = subprocess.run(["git", "describe", "--tags", "--abbrev=0", "--match", "v*"],
+                                capture_output=True, text=True)
+        tag = result.stdout.strip() if result.returncode == 0 else ""
+    if tag and not tag.startswith("v"):
+        tag = "v" + tag
+    return tag
+
+
+def asset_name(tag):
+    return ASSET_FORMAT.replace("{tag}", tag).replace("{platform}", platform_id())
 
 
 def cmake_path(path):
@@ -152,6 +198,10 @@ def build_runner(args, compilers):
         # without them neither the build nor the game needs any dump.
         "-DNDS_RETAIL_BIOS_BANKS=OFF",
         "-DNDS_EMBED_DUMPS_DIR=",
+        # The self-updater (ndsrecomp/runner/src/update/self_update.h).
+        f"-DNDS_UPDATE_REPO={UPDATE_REPO}",
+        f"-DNDS_UPDATE_ASSET_FORMAT={ASSET_FORMAT}",
+        f"-DNDS_RELEASE_VERSION_OVERRIDE={args.version or ''}",
     ] + compiler_args(compilers)
 
     # Hooks are baked into the banks unless --no-hooks, and then the runner
@@ -208,25 +258,46 @@ def do_package(name):
     import tarfile
     import zipfile
 
-    # game.toml is embedded in the executable and it needs no dumps, so it
-    # ships on its own with the licenses.
+    if not name:
+        tag = release_tag()
+        if not tag:
+            die("no release tag to name the package after: pass --package NAME, "
+                "set NDS_VERSION_NAME or create a v* tag")
+        name = asset_name(tag)
+
     exe = f"{PROJECT_NAME}{EXE_SUFFIX}"
     if not os.path.isfile(exe):
         die(f"{exe} not found: build first")
+
+    # macOS ships an .app in a .dmg, which the updater swaps whole.
+    if platform.system() == "Darwin":
+        run([sys.executable, os.path.join("scripts", "package-mac.py"), "--name", name,
+             "--version", release_tag().lstrip("v") or "0.0.0"])
+        return
+
+    # game.toml is embedded in the executable and it needs no dumps, so it
+    # ships on its own with the licenses. pkg/ holds the same files loose.
     files = [exe, "LICENSE", "LICENSE-GPL", "README.md"]
+    pkg_dir = "pkg"
+    if os.path.isdir(pkg_dir):
+        shutil.rmtree(pkg_dir)
+    os.makedirs(pkg_dir)
+    for f in files:
+        print(f"+ cp {f} {pkg_dir}/")
+        shutil.copy2(f, pkg_dir)
 
     if IS_WINDOWS:
         archive_path = f"{name}.zip"
         print(f"+ zip {archive_path}")
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for f in files:
-                zf.write(f, f)
+                zf.write(os.path.join(pkg_dir, f), f)
     else:
         archive_path = f"{name}.tar.gz"
         print(f"+ tar {archive_path}")
         with tarfile.open(archive_path, "w:gz") as tf:
             for f in files:
-                tf.add(f, arcname=f)
+                tf.add(os.path.join(pkg_dir, f), arcname=f)
 
     github_env = os.environ.get("GITHUB_ENV")
     if github_env:
@@ -238,8 +309,14 @@ def do_package(name):
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--package", metavar="NAME",
-                   help="Package the built executable into NAME.zip (Windows) or NAME.tar.gz; skips the build")
+    p.add_argument("--package", metavar="NAME", nargs="?", const="",
+                   help="Package the built executable into NAME.zip (Windows), NAME.tar.gz "
+                        "(Linux) or pkg/NAME.dmg (macOS) and skip the build; without NAME, "
+                        f"the release asset name ({ASSET_FORMAT}) for NDS_VERSION_NAME or "
+                        "the newest v* tag")
+    p.add_argument("--version", help="Release version the self-updater compares against "
+                                     "(X.Y.Z); default: NDS_VERSION_NAME, else the newest v* tag, "
+                                     "else none, which turns the updater off")
     p.add_argument("--release", dest="build_type", action="store_const",
                    const="Release", default="RelWithDebInfo",
                    help="Build an optimized release without debug symbols; default is RelWithDebInfo")
@@ -248,6 +325,9 @@ def parse_args():
                         "so keep it low on hosts with little RAM)")
     p.add_argument("--runner-only", action="store_true",
                    help="Skip the bank build and only rebuild the runner")
+    p.add_argument("--banks-only", action="store_true",
+                   help="Only generate the banks (and the FreeBIOS banks), e.g. before "
+                        "building the runner with a cross toolchain")
     p.add_argument("--no-hooks", action="store_true",
                    help="Generate banks without config/hooks and link no hook handlers")
     p.add_argument("--firmware-banks", action="store_true",
@@ -270,7 +350,7 @@ def main():
     root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
     os.chdir(root)
 
-    if args.package:
+    if args.package is not None:
         do_package(args.package)
         return
 
@@ -291,6 +371,10 @@ def main():
         python = ensure_venv()
         build_banks(args, compilers, python)
         ensure_freebios_banks()
+        if args.banks_only:
+            # The hooks' text, which the runner build would generate.
+            run([sys.executable, os.path.join("scripts", "gen-lang.py")])
+            return
     elif not os.path.isdir(os.path.join("generated", "recomp")):
         die("generated/recomp missing: run without --runner-only first")
 

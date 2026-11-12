@@ -23,3 +23,16 @@ __pycache__/
 
 # scripts/gen-lang.py output.
 /src/hooks/lang.generated.h
+# scripts/build.py --package and scripts/package-mac.py output.
+/pkg/
+/pkg-dmg/
+/*.app/
+
+# Android build output, and the sideload signing key (a private key does not
+# belong in git; see android/app/build.gradle.kts).
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/app/jniLibs/
+/android/local.properties
+/android/keystore/

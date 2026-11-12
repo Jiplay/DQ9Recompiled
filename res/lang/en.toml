@@ -7,6 +7,9 @@ name = "English"
 options = "Options"
 import_save = "Import save file"
 export_save = "Export save file"
+# Shown when a newer release is out (src/hooks/options_row.cpp); {} is
+# its version.
+update = "Update to {}"
 
 # The Misc. list's Options row (src/hooks/camp_options.cpp).
 [camp_menu]

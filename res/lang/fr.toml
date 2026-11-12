@@ -4,6 +4,7 @@ name = "Français"
 options = "Options"
 import_save = "Importer une sauvegarde"
 export_save = "Exporter la sauvegarde"
+update = "Mettre <`a> jour vers {}"
 
 [camp_menu]
 options_description = "Permet de modifier les param<`e>tres d'affichage, de son, de commandes et de jeu."
