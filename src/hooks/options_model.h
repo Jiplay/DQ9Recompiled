@@ -3,7 +3,8 @@
 //
 // The rows and their values are the runtime menu's (title_menu.h), so every
 // menu shows the same settings; the labels are translated here
-// (res/lang/*.toml [options]), English when a key is missing.
+// (res/lang/*.toml [options]), English when a key is missing, and the rows
+// are grouped into the pages' own categories (kLayout).
 #pragma once
 
 #include <cctype>
@@ -74,6 +75,74 @@ inline bool Hidden(const NdsTitleMenuRow& row) {
            (row.type != NdsTitleMenuRowType::Bool &&
             row.type != NdsTitleMenuRowType::Int &&
             row.type != NdsTitleMenuRowType::Choice);
+}
+
+// The pages' layout: which category each row goes in, and the order of the
+// categories (as they first appear here) and of the rows in each. The
+// runtime menu groups its rows by where they come from (Display, Audio,
+// Input, then every title setting in Game); the pages group them by what a
+// player looks for, the most used first:
+//   Display          what the picture looks like, the frame rate first
+//   Quality of life  the hooks' changes to how the game behaves, the
+//                    language first
+//   Controls         mouse and gamepad (the mouse-friendly menus too: the
+//                    runtime's own rows here are often hidden)
+//   Audio
+// Only the category changes: the keys, and so settings.toml, stay as they
+// are. A row not named here (Netplay, System, or one added later) comes after
+// these in the runtime menu's order, in its own section renamed by
+// PageSection; Hidden() runs on the arranged rows.
+struct Placement {
+    const char* key;
+    const char* section;
+};
+
+inline constexpr Placement kLayout[] = {
+    {"title.fps_mode", "Display"},
+    {"title.ui_size", "Display"},
+    {"display.resolution_scale", "Display"},
+    {"display.scaling", "Display"},
+    {"display.second_screen_size", "Display"},
+    {"display.show_fps", "Display"},
+    {"display.smooth_3d", "Display"},  // never shown: fps_mode owns it
+    {"title.language", "Quality of life"},
+    {"title.skip_intros", "Quality of life"},
+    {"title.camera_mode", "Quality of life"},
+    {"title.unlock_camera_rotation", "Quality of life"},
+    {"title.mouse_friendly", "Controls"},
+    {"input.gamepad_layout", "Controls"},
+    {"input.mouse_sensitivity", "Controls"},
+    {"audio.volume", "Audio"},
+    {"audio.mute", "Audio"},
+};
+
+// The page for a row kLayout does not name.
+inline std::string PageSection(const std::string& section) {
+    if (section == "Game") return "Quality of life";
+    if (section == "Input") return "Controls";
+    return section;
+}
+
+// `rows` in the pages' order, with the pages' sections.
+inline std::vector<NdsTitleMenuRow> Arranged(std::vector<NdsTitleMenuRow> rows) {
+    std::vector<NdsTitleMenuRow> out;
+    out.reserve(rows.size());
+    std::vector<bool> placed(rows.size(), false);
+    for (const Placement& place : kLayout) {
+        for (size_t i = 0; i < rows.size(); ++i) {
+            if (placed[i] || rows[i].key != place.key) continue;
+            placed[i] = true;
+            rows[i].section = place.section;
+            out.push_back(std::move(rows[i]));
+            break;
+        }
+    }
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (placed[i]) continue;
+        rows[i].section = PageSection(rows[i].section);
+        out.push_back(std::move(rows[i]));
+    }
+    return out;
 }
 
 inline int ValueOf(const Model& model, const NdsTitleMenuRow& row) {
@@ -174,7 +243,7 @@ inline std::vector<std::string> Wrap(const std::string& text, size_t line_chars,
 // end when `back` is set.
 inline void BuildRows(Model& model, size_t max_rows, bool back = true) {
     model.rows.clear();
-    const std::vector<NdsTitleMenuRow> all = nds_title_menu_rows();
+    const std::vector<NdsTitleMenuRow> all = Arranged(nds_title_menu_rows());
     // A value the frontend now reports needs no override any more.
     for (const NdsTitleMenuRow& row : all) {
         const auto it = model.pending.find(row.key);

@@ -13,7 +13,7 @@ update = "Update to {}"
 
 # The Misc. list's Options row (src/hooks/camp_options.cpp).
 [camp_menu]
-options_description = "Change the display, audio, input and game settings."
+options_description = "Change the display, quality of life, controls and audio settings."
 
 # The Options pages (src/hooks/options_row.cpp). Keys are built from the
 # runtime menu's rows: cat_<section>, <row key with _ for .>, v_<choice>,
@@ -22,9 +22,9 @@ options_description = "Change the display, audio, input and game settings."
 # the game's own tags (<'e> <`a> <:u> <^e> <,c> <~n> <ss>).
 [options]
 cat_display = "Display"
+cat_quality_of_life = "Quality of life"
+cat_controls = "Controls"
 cat_audio = "Audio"
-cat_input = "Input"
-cat_game = "Game"
 cat_netplay = "Netplay"
 back = "Back"
 v_on = "On"
@@ -70,10 +70,10 @@ v_italian = "Italiano"
 v_spanish = "Espa<~n>ol"
 # d_<key>: the description shown under the page, at most three lines of
 # about 36 characters (a tag counts as one).
-d_cat_display = "Window, scaling and 3D resolution."
+d_cat_display = "Frame rate, UI size, 3D resolution and scaling."
+d_cat_quality_of_life = "Language, intros and camera: changes to how the game plays."
+d_cat_controls = "Mouse-friendly menus, gamepad and mouse."
 d_cat_audio = "Volume and mute."
-d_cat_input = "Gamepad and mouse."
-d_cat_game = "Camera, language, menus and intros."
 d_cat_netplay = "Play online. Hosting and joining use the game's own multiplayer menus."
 d_display_scaling = "Integer keeps whole pixels, bilinear smooths, nearest stays pixelated at any size."
 d_display_resolution_scale = "3D detail relative to the window: 100% matches the screen, more is sharper."
