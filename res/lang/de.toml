@@ -2,6 +2,8 @@ name = "Deutsch"
 
 [main_menu]
 options = "Optionen"
+import_save = "Spielstand importieren"
+export_save = "Spielstand exportieren"
 
 [camp_menu]
 options_description = "<:A>ndere die Einstellungen f<:u>r Anzeige, Ton, Steuerung und Spiel."

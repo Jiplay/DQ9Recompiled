@@ -17,6 +17,13 @@
 //
 // The rows, their values and their translated labels come from
 // options_model.h, which the camp menu's Options row shares.
+//
+// The main menu also gets a save row above Options: "Import save file"
+// when there is no save, "Export save file" when there is one. It is one
+// more entry cell, made by a call the hook on the rows' builder (0x0216B498)
+// adds, and laid out with the others when the menu opens its panel. It
+// runs the Options row's handler too, which asks the frontend for the file
+// dialog (title_save.h); an imported save resets the console.
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -27,6 +34,8 @@
 #include <vector>
 
 #include "options_model.h"
+#include "save_image.h"
+#include "title_save.h"
 
 namespace {
 
@@ -103,8 +112,15 @@ constexpr uint32_t kPadPrevious = 0x02114E32u;
 constexpr uint32_t kKeyA = 0x001u, kKeyB = 0x002u;
 constexpr uint32_t kKeyRight = 0x010u, kKeyLeft = 0x020u;
 
+// The main menu (ov4 bss): +3 the mode that picks its rows (1 and 5: a
+// save, rows 1; 2: no save, rows 2).
+constexpr uint32_t kMenuMode = 0x02171034u + 3u;
+constexpr uint32_t kTextRowsId = 2u;  // any text id but the WFC row's
+constexpr uint32_t kMainCells[] = {50u, 51u, 52u};
+
 // Guest functions.
 constexpr uint32_t kFnHandler = 0x0216D6A0u;      // the hooked handler
+constexpr uint32_t kFnRows = 0x0216B498u;         // ov4 (scene, rows, icon)
 constexpr uint32_t kFnNewCell = 0x0216AFB0u;      // ov4
 constexpr uint32_t kFnPanelClose = 0x021F8120u;   // ov23 (panel)
 constexpr uint32_t kFnPanelOpen = 0x021F7EB8u;    // ov23
@@ -123,6 +139,9 @@ constexpr uint32_t kTextBuffer = 0x02184200u;  // the Options row's string
 constexpr uint32_t kTextBufferSize = 0xA0u;
 
 constexpr uint32_t kDescText = 0x02183CE0u;  // kDescLines strings
+constexpr uint32_t kSaveRowText = 0x02184120u;  // the save row's string
+constexpr uint32_t kSaveRowTextSize = 0x60u;
+constexpr uint32_t kMainGridArray = 0x02184180u;  // up to 4 u16
 
 constexpr uint32_t kMaxRows = 8u;
 constexpr uint32_t kFirstCell = 110u;  // ids 110..120: unused by opening.stb
@@ -138,6 +157,8 @@ constexpr uint32_t kDescCellTextId = 2u;  // any id but the WFC row's
 constexpr int kRowX = 12, kRowY = 6, kRowPitch = 13;
 constexpr uint32_t kPageWidth = 30u;  // tiles
 constexpr uint32_t kPageVram = 96u;   // as the game opens 212 and 210
+// The save row's cell: past the pages' (110..120), in the rows' group.
+constexpr uint32_t kSaveCell = kFirstDescCell + kDescLines;
 
 // ---- Calling guest code from the hook -----------------------------------
 
@@ -328,10 +349,11 @@ void Open(uint32_t scene) {
     // which the description's panel would draw (it is theirs).
     for (uint32_t w = bus_read_u32(scene + kSceneWidgets); w;
          w = bus_read_u32(w + kWidgetNext)) {
+        const uint32_t id = bus_read_u16(w + kWidgetId);
         const bool main_row =
             bus_read_u16(w + kWidgetType) == kTypeCell &&
             bus_read_u16(w + kCellLayer) == kMainMenuLayer &&
-            bus_read_u16(w + kWidgetId) < kFirstCell;
+            (id < kFirstCell || id == kSaveCell);
         if (bus_read_u16(w + kWidgetGroup) == kFileInfoGroup || main_row)
             bus_write_u8(w + kWidgetFlags,
                          bus_read_u8(w + kWidgetFlags) | kHidden);
@@ -375,6 +397,28 @@ void Close() {
     });
 }
 
+// The main menu's save row was chosen: ask for the dialog.
+bool SaveRowChosen(uint32_t scene) {
+    const uint32_t grid = FindTyped(
+        scene, bus_read_u16(scene + kSceneActiveGrid), kTypeGrid);
+    if (!grid || bus_read_u32(grid + kGridCells) != kMainGridArray)
+        return false;
+    const uint32_t row = bus_read_u16(grid + kGridRow);
+    if (row >= bus_read_u16(grid + kGridRows) ||
+        bus_read_u16(kMainGridArray + 2u * row) != kSaveCell)
+        return false;
+    if (bus_read_u8(kMenuMode) == 2u) {
+        nds_title_save_import([](const std::vector<uint8_t>& file,
+                                 std::vector<uint8_t>* image,
+                                 std::string* error) {
+            return dq9::save::Convert(file, image, error);
+        });
+    } else {
+        nds_title_save_export();
+    }
+    return true;
+}
+
 void Event(uint32_t scene) {
     if (g_menu.open && (scene != g_menu.scene || !PageShown(scene))) {
         // The scene left the page on its own (a reset, another screen). If
@@ -387,7 +431,7 @@ void Event(uint32_t scene) {
         if (stale) return;
     }
     if (!g_menu.open) {
-        Open(scene);
+        if (!SaveRowChosen(scene)) Open(scene);
         return;
     }
     const uint32_t held = bus_read_u16(kPadHeld);
@@ -521,4 +565,115 @@ NDS_TITLE_HOOK bool Dq9OptionsMenu(uint32_t* r0, uint32_t* r1, uint32_t* r2,
     *r0 = d.result;
     d = Driver{};
     return false;
+}
+
+// ---- The save row -------------------------------------------------------
+
+namespace {
+
+// The call to 0x0216AFB0 the rows' builder hook makes before the builder
+// runs: the builder's own registers, given back when the call returns.
+struct SaveRowCall {
+    bool waiting = false;
+    uint32_t r[4] = {}, sp = 0, lr = 0, call_sp = 0;
+};
+
+SaveRowCall g_save_row;
+
+// The main menu's rows top to bottom, the save row's included, or none in
+// a mode without one.
+std::vector<uint32_t> MainRows(uint8_t mode) {
+    if (mode == 1u || mode == 5u)
+        return {kMainCells[0], kMainCells[1], kSaveCell, kMainCells[2]};
+    if (mode == 2u) return {kMainCells[0], kSaveCell, kMainCells[1]};
+    return {};
+}
+
+}  // namespace
+
+// The entry of the main menu's rows builder 0x0216B498 (r0 = the scene,
+// r1 = which rows): with rows 1 (a save) or 2 (no save), first make the
+// save row's cell. True: call *r12 (the hook jumps to a `bx r12`) with
+// lr = this instruction, which brings the call back here. False: run the
+// builder, with the registers it was called with.
+NDS_TITLE_HOOK bool Dq9SaveRowCell(uint32_t* r0, uint32_t* r1, uint32_t* r2,
+                                   uint32_t* r3, uint32_t* r12, uint32_t* sp,
+                                   uint32_t* lr) {
+    SaveRowCall& c = g_save_row;
+    uint32_t* const regs[] = {r0, r1, r2, r3};
+    if (c.waiting && *sp == c.call_sp) {
+        c.waiting = false;
+        for (size_t i = 0; i < 4; ++i) *regs[i] = c.r[i];
+        *sp = c.sp;
+        *lr = c.lr;
+        if (const uint32_t cell = FindTyped(*r0, kSaveCell, kTypeCell)) {
+            const uint32_t language = bus_read_u8(dq9::kGameTextLanguage);
+            WriteString(kSaveRowText, kSaveRowTextSize,
+                        *r1 == 2u
+                            ? dq9::Tr("main_menu", "import_save", language)
+                            : dq9::Tr("main_menu", "export_save", language));
+            bus_write_u32(cell + kCellText, kSaveRowText);
+        }
+        return false;
+    }
+    c.waiting = false;
+    if ((*r1 != 1u && *r1 != 2u) || FindWidget(*r0, kSaveCell)) return false;
+    for (size_t i = 0; i < 4; ++i) c.r[i] = *regs[i];
+    c.sp = *sp;
+    c.lr = *lr;
+    c.call_sp = (*sp - 0x40u) & ~7u;
+    // 0x0216AFB0(scene, cell, group, layer, text, x, y, 10, enabled); the
+    // layout hook below places it.
+    const uint32_t stack[] = {kTextRowsId, static_cast<uint32_t>(kRowX), 0u,
+                              10u, 1u};
+    for (size_t i = 0; i < 5; ++i)
+        bus_write_u32(c.call_sp + 4u * static_cast<uint32_t>(i), stack[i]);
+    *r1 = kSaveCell;
+    *r2 = kCellGroup;
+    *r3 = kMainMenuLayer;
+    *sp = c.call_sp;
+    *lr = kFnRows;
+    *r12 = kFnNewCell;
+    c.waiting = true;
+    return true;
+}
+
+// Before the main menu opens its panel (0x021F7EB8, r1 = the scene, the
+// height at [sp+8]; r7 = the width, r5 the panel's VRAM base, to which the
+// menu adds width * height * 32 for the save summary's panel after the
+// call): spread the rows over a panel two tiles taller with the save row
+// above Options, and give the grid the rows in that order.
+NDS_TITLE_HOOK void Dq9SaveRowLayout(uint32_t* r1, uint32_t* r5, uint32_t* r7,
+                                     uint32_t* sp) {
+    const uint32_t scene = *r1;
+    const std::vector<uint32_t> ids = MainRows(bus_read_u8(kMenuMode));
+    const uint32_t grid = FindTyped(
+        scene, bus_read_u16(scene + kSceneActiveGrid), kTypeGrid);
+    if (ids.empty() || !grid) return;
+    std::vector<uint32_t> cells;
+    for (const uint32_t id : ids) {
+        const uint32_t cell = FindTyped(scene, id, kTypeCell);
+        if (!cell || bus_read_u16(cell + kCellLayer) != kMainMenuLayer) return;
+        cells.push_back(cell);
+    }
+    const uint32_t count = static_cast<uint32_t>(ids.size());
+    // As the game's three rows in six tiles; four rows get eight.
+    const uint32_t height = count == 4u ? 8u : 6u;
+    const int top = count == 4u ? 8 : 6;
+    for (uint32_t i = 0; i < count; ++i) {
+        bus_write_u16(cells[i] + kCellY,
+                      static_cast<uint16_t>(top + kRowPitch * static_cast<int>(i)));
+        bus_write_u16(kMainGridArray + 2u * i, static_cast<uint16_t>(ids[i]));
+    }
+    bus_write_u16(cells[count == 4u ? 2u : 1u] + kCellAction, kOptionsHandler);
+    bus_write_u32(grid + kGridCells, kMainGridArray);
+    bus_write_u16(grid + kGridRows, static_cast<uint16_t>(count));
+    bus_write_u16(grid + kGridCols, 1u);
+    if (bus_read_u16(grid + kGridRow) >= count) bus_write_u16(grid + kGridRow, 0u);
+    bus_write_u16(grid + kGridCol, 0u);
+    bus_write_u32(grid + kGridRedraw, 1u);
+
+    const uint32_t old_height = bus_read_u32(*sp + 8u);
+    bus_write_u32(*sp + 8u, height);
+    *r5 += *r7 * (height - old_height) * 32u;
 }

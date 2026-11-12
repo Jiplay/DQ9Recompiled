@@ -5,6 +5,8 @@ name = "English"
 
 [main_menu]
 options = "Options"
+import_save = "Import save file"
+export_save = "Export save file"
 
 # The Misc. list's Options row (src/hooks/camp_options.cpp).
 [camp_menu]

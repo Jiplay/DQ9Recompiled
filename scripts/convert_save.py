@@ -6,6 +6,9 @@ The save is region independent (same layout and charset for EU/US), so the
 conversion only strips whatever precedes the "DRAGON QUEST IX" marker and
 keeps the 65536 bytes after it. Both slots' CRC32s are verified.
 
+The title menu's "Import save file" row does the same conversion in game
+(src/hooks/save_image.h).
+
 usage: convert_save.py INPUT [OUTPUT]   (default OUTPUT: saves/DQ9Recomp.sav
 under Documents/DQ9Recomp; an existing OUTPUT is backed up to OUTPUT.bak-N)
 """

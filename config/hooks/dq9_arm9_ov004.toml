@@ -66,3 +66,46 @@ registers = ["r0", "r1", "r2", "r3", "r12", "sp", "lr"]
 on_true = "jump"
 jump_address = 0x0216FA40 # bx r12
 on_false = "return"
+
+# The save row: "Import save file" above Options when there is no save
+# (rows 2), "Export save file" above it when there is one (rows 1). Handler:
+# src/hooks/options_row.cpp; the text is res/lang/*.toml [main_menu]
+# import_save / export_save.
+#
+# At the entry of the rows' builder 0x0216B498 (r0 = scene, r1 = rows), the
+# hook first calls 0x0216AFB0 for the row's cell (cell 121, group 1, layer
+# 210), through the same `bx r12` veneer, with lr = 0x0216B498: the call
+# comes back to the hook, which restores the builder's registers and lets
+# it run.
+[[hook]]
+address = 0x0216B498      # stmdb sp!, {r4, r5, lr} (r0 = scene, r1 = rows)
+mode = "arm"
+name = "Dq9SaveRowCell"
+registers = ["r0", "r1", "r2", "r3", "r12", "sp", "lr"]
+on_true = "jump"
+jump_address = 0x0216FA40 # bx r12
+
+# 0x0216C810 opens the menu's panel (210) with 0x021F7EB8(panel, scene,
+# 0x60, 1, [sp] 1, [sp+4] width, [sp+8] height, ...), r7 = the width, then
+# adds width * height * 32 to r5 (0x60) for the save summary's panel (211,
+# from tile row 12 down at most). Before each call the hook lays the rows
+# out (save row above Options, cell +0x3C y), points the grid at them and
+# makes the panel two tiles taller: rows 1 three to four rows, 6 to 8
+# tiles; rows 2 two to three rows, 5 to 6 tiles (as rows 1 had).
+[[hook]]
+address = 0x0216CEDC      # bl 0x021F7EB8 (rows 1)
+mode = "arm"
+name = "Dq9SaveRowLayout"
+registers = ["r1", "r5", "r7", "sp"]
+
+[[hook]]
+address = 0x0216CF18      # bl 0x021F7EB8 (rows 1, r7 != 0 path)
+mode = "arm"
+name = "Dq9SaveRowLayout"
+registers = ["r1", "r5", "r7", "sp"]
+
+[[hook]]
+address = 0x0216CF5C      # bl 0x021F7EB8 (rows 2)
+mode = "arm"
+name = "Dq9SaveRowLayout"
+registers = ["r1", "r5", "r7", "sp"]

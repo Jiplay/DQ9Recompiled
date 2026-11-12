@@ -2,6 +2,8 @@ name = "Español"
 
 [main_menu]
 options = "Opciones"
+import_save = "Importar partida guardada"
+export_save = "Exportar partida guardada"
 
 [camp_menu]
 options_description = "Permite cambiar los ajustes de pantalla, sonido, controles y juego."
