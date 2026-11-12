@@ -77,6 +77,9 @@ int g_grid_hover_x = 0, g_grid_hover_y = 0;
 uint32_t g_list_hover = 0;
 int g_list_hover_x = 0, g_list_hover_y = 0;
 
+// When a choice last ran its pen step (a simple choice list, or a window list
+// such as the priest's): see Dq9ChoiceListActive.
+std::chrono::steady_clock::time_point g_choice_seen{};
 }  // namespace
 
 // Before `cmp r1, #0` at 0x021F9384: r1 is the press edge. A moved mouse
@@ -125,8 +128,10 @@ NDS_TITLE_HOOK void Dq9MouseMenuGridChoose(uint32_t* cpsr) {
 
 // Before `cmp r0, #0` at 0x0205BC70 (in 0x0205BC3C): r0 is the press edge,
 // r4 the widget. A moved mouse with no button held enters the pen code too.
+// The list's step (0x0205C5C0) runs this every frame the list takes input.
 NDS_TITLE_HOOK void Dq9MouseMenuListPress(uint32_t* press, uint32_t* widget) {
     g_list_hover = 0;
+    g_choice_seen = std::chrono::steady_clock::now();
     if (!Enabled() || *press != 0u) return;
     if (!HoverMoved(*widget, &g_list_hover_x, &g_list_hover_y)) return;
     g_list_hover = *widget;
@@ -181,12 +186,23 @@ bool g_choice_click = false;
 int g_choice_hover_x = 0, g_choice_hover_y = 0;
 }  // namespace
 
+// True while a simple choice list (Yes/No...) or a window list (priest, camp
+// menu...) takes input: their pen steps stamp g_choice_seen every frame. The
+// message box under it waits in its own states, so a right click or B that
+// advances the box (an advance flag, or an injected A) would answer the list
+// with its first entry. Used by text_instant.cpp and Dq9MessageTopClick.
+bool Dq9ChoiceListActive() {
+    return std::chrono::steady_clock::now() - g_choice_seen <
+           std::chrono::milliseconds(150);
+}
+
 // Before `cmp r1, #0` at 0x020E1E70 (in 0x020E1E5C): r1 is the press edge,
 // r4 the list's rects. A moved mouse with no button held enters the pen
 // code too.
 NDS_TITLE_HOOK void Dq9MouseMenuChoicePress(uint32_t* press, uint32_t* rects) {
     g_choice_hover = 0;
     g_choice_click = false;
+    g_choice_seen = std::chrono::steady_clock::now();
     if (!Enabled()) return;
     if (*press != 0u) {
         g_choice_click = true;
@@ -235,7 +251,10 @@ int g_tap_hover_x = 0, g_tap_hover_y = 0;
 // Before `cmp r1, #0` after the scene reads the press edge (r1). `sp` tells
 // the scenes apart for HoverMoved. A moved mouse with no button held enters
 // the pen code too.
+// It runs every frame the menu takes input (Pavo's multiplayer choice, over a
+// box waiting in state 3), so it marks a choice as up (Dq9ChoiceListActive).
 NDS_TITLE_HOOK void Dq9MouseMenuTapPress(uint32_t* press, uint32_t* sp) {
+    g_choice_seen = std::chrono::steady_clock::now();
     g_tap_mode = 0;
     if (!Enabled()) return;
     if (*press != 0u) {
@@ -824,9 +843,13 @@ NDS_TITLE_HOOK void Dq9MessageTopClick(uint32_t* held) {
     // prints the text at once, Dq9TextInstant).
     static bool b_was_down = false;
     const bool b_down = (*held & 2u) != 0u;
-    const bool right_click = (right && !right_was_down) || (b_down && !b_was_down);
+    const bool new_right = right && !right_was_down;
+    const bool right_click = new_right || (b_down && !b_was_down);
     right_was_down = right;
     b_was_down = b_down;
+    // On a choice a right click is B, which cancels (the last / "No" entry),
+    // as on the DS; it never advances the box underneath (the check below).
+    if (new_right && Dq9ChoiceListActive()) *held |= 2u;  // B
     // State 3 holds while the text prints too, so a press during printing
     // would print and advance at once. The box has finished printing when
     // its print position (+120) has not moved for a few frames (slow text
@@ -838,8 +861,8 @@ NDS_TITLE_HOOK void Dq9MessageTopClick(uint32_t* held) {
     else if (still < 1000) ++still;
     last_box = messages;
     last_pos = pos;
-    if (box_up && right_click && bus_read_u32(messages + 2464u) == 3u &&
-        still >= 8)
+    if (box_up && right_click && !Dq9ChoiceListActive() &&
+        bus_read_u32(messages + 2464u) == 3u && still >= 8)
         *held |= 1u;  // A
     if (g_msg_click_seen == g_msg_click_used) return;
     g_msg_click_used = g_msg_click_seen;

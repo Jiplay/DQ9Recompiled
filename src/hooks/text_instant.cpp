@@ -5,6 +5,8 @@
 #include "title_hooks.h"
 #include "title_settings.h"
 
+bool Dq9ChoiceListActive();  // mouse_menus.cpp
+
 namespace {
 // The game's key object (literal at 0x02044418): u16 +0 = keys held,
 // u16 +2 = keys held last frame. B is bit 1.
@@ -28,8 +30,16 @@ NDS_TITLE_HOOK void Dq9TextInstant(uint32_t* chars) {
 
 // Before `cmp r0, #0` at 0x02044168: r5 is the "advance" flag the game sets
 // for A / B / X. A new right click sets it too, as B does.
+// While the manager shows a choice list (state 6 and the list flag at
+// +0x19BA, the game's own test) a right click must not answer it. The manager is found through
+// the owner literal at 0x020421BC (+28), as in mouse_menus.cpp.
 NDS_TITLE_HOOK void Dq9TextAdvanceRightClick(uint32_t* advance) {
     const bool right = nds_title_right_mouse_held();
-    if (right && !g_right_was_down) *advance = 1u;
+    const uint32_t owner = bus_read_u32(0x020421BCu);
+    const uint32_t mgr = owner != 0 ? bus_read_u32(owner + 28u) : 0u;
+    const bool choice = Dq9ChoiceListActive() ||
+                        (mgr != 0 && bus_read_u32(mgr + 0x9A0u) == 6u &&
+                         bus_read_u8(mgr + 0x19BAu) != 0u);
+    if (right && !g_right_was_down && !choice) *advance = 1u;
     g_right_was_down = right;
 }
