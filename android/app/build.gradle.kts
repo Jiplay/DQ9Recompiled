@@ -111,6 +111,14 @@ android {
         layout.projectDirectory.dir("jniLibs")
     )
 
+    // The launcher icon's foreground is the ROM's banner icon, so it is
+    // generated (scripts/gen-android-icon.py), never committed.
+    val iconRes = layout.projectDirectory.dir("icon-res").asFile
+    require(iconRes.resolve("mipmap-xxxhdpi/ic_launcher_foreground.png").isFile) {
+        "Launcher icon not generated: run python scripts/gen-android-icon.py"
+    }
+    sourceSets["main"].res.srcDirs(iconRes)
+
     /*
      * SDL3's Android Java glue (org.libsdl.app.*) comes from the SDL3 source
      * tree libSDL3.so was built from, not from this repository: the native

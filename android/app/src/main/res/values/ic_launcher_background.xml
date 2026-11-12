@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Behind the (opaque) icon foreground; the banner icon's sky blue. -->
+    <color name="ic_launcher_background">#217BE7</color>
+</resources>

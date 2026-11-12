@@ -34,5 +34,6 @@ __pycache__/
 /android/build/
 /android/app/build/
 /android/app/jniLibs/
+/android/app/icon-res/
 /android/local.properties
 /android/keystore/

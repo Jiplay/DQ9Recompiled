@@ -12,6 +12,8 @@
 
     <application
         android:label="DQ9Recomp"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:hasCode="true"
         android:appCategory="game"
         android:isGame="true">

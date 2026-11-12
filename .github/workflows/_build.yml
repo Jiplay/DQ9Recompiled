@@ -32,9 +32,8 @@ env:
   ROM_SHA1: ff761d349709f329c8ac4bd0023fdce21861e8a1
   ROM_CACHE_KEY: dq9-rom-v1
   SDL3_VERSION: "3.2.10"
-  # The runner has no Android build yet (see android/app/build.gradle.kts):
-  # the android-arm64 leg only runs its steps once vars.ANDROID_BUILD is
-  # 'true'.
+  # The android-arm64 leg only runs its steps when vars.ANDROID_BUILD is
+  # 'true', so it can be switched off without editing the workflow.
   ANDROID_BUILD: ${{ vars.ANDROID_BUILD == 'true' }}
 
 jobs:
@@ -335,10 +334,15 @@ jobs:
 
           JNI_DIR="$PWD/android/app/jniLibs/arm64-v8a"
           mkdir -p "$JNI_DIR"
-          cp -v build-android/libnds_runner.so "$JNI_DIR/"
+          # The NDK compiles with -g even in Release, and Gradle keeps the
+          # symbols (packaging.jniLibs.keepDebugSymbols): drop them here.
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"             --strip-debug -o "$JNI_DIR/libnds_runner.so" build-android/libnds_runner.so
           cp -v "$(find build-sdl3/install -name libSDL3.so | head -1)" "$JNI_DIR/"
           echo "=== Staged jniLibs ==="
           ls -lh "$JNI_DIR/"
+
+          # The launcher icon, from the ROM's banner (not in git).
+          python scripts/gen-android-icon.py
 
           # Signed with the sideload key when the keystore was restored above,
           # otherwise debug-signed.
