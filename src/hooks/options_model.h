@@ -67,8 +67,9 @@ inline bool Hidden(const NdsTitleMenuRow& row) {
     // Not shown: System (Resume and Quit) and, of Netplay, everything the
     // game does itself: hosting follows the Rapportal, joining is the game's
     // own host list, and the lobby is named after the host.
+    // By key, not section: the pages move the Netplay rows into General.
     if (row.section == "System") return true;
-    if (row.section == "Netplay")
+    if (row.key.rfind("netplay.", 0) == 0)
         return IsNetplayToggle(row) ? false
                                     : !IsNetplayAccount(row) || !row.enabled;
     return !row.enabled ||
@@ -81,23 +82,27 @@ inline bool Hidden(const NdsTitleMenuRow& row) {
 // categories (as they first appear here) and of the rows in each. The
 // runtime menu groups its rows by where they come from (Display, Audio,
 // Input, then every title setting in Game); the pages group them by what a
-// player looks for, the most used first:
-//   Display          what the picture looks like, the frame rate first
-//   Quality of life  the hooks' changes to how the game behaves, the
-//                    language first
-//   Controls         mouse and gamepad (the mouse-friendly menus too: the
-//                    runtime's own rows here are often hidden)
-//   Audio
+// player looks for, the most used first, and no page is left with only a row
+// or two:
+//   General   set once: language first, intros, sound, Netplay
+//   Display   what the picture looks like, the frame rate first
+//   Controls  menus, camera and gamepad
 // Only the category changes: the keys, and so settings.toml, stay as they
-// are. A row not named here (Netplay, System, or one added later) comes after
-// these in the runtime menu's order, in its own section renamed by
-// PageSection; Hidden() runs on the arranged rows.
+// are. A row not named here (System, or one added later) comes after these
+// in the runtime menu's order, in the page PageSection picks; Hidden() runs
+// on the arranged rows.
 struct Placement {
     const char* key;
     const char* section;
 };
 
 inline constexpr Placement kLayout[] = {
+    {"title.language", "General"},
+    {"title.skip_intros", "General"},
+    {"audio.volume", "General"},
+    {"audio.mute", "General"},
+    {"netplay.enabled", "General"},
+    {"netplay.account", "General"},  // only while a sign-in is wanted
     {"title.fps_mode", "Display"},
     {"title.ui_size", "Display"},
     {"display.resolution_scale", "Display"},
@@ -105,21 +110,17 @@ inline constexpr Placement kLayout[] = {
     {"display.second_screen_size", "Display"},
     {"display.show_fps", "Display"},
     {"display.smooth_3d", "Display"},  // never shown: fps_mode owns it
-    {"title.language", "Quality of life"},
-    {"title.skip_intros", "Quality of life"},
-    {"title.camera_mode", "Quality of life"},
-    {"title.unlock_camera_rotation", "Quality of life"},
     {"title.mouse_friendly", "Controls"},
-    {"input.gamepad_layout", "Controls"},
-    {"input.mouse_sensitivity", "Controls"},
-    {"audio.volume", "Audio"},
-    {"audio.mute", "Audio"},
+    {"title.camera_mode", "Controls"},
+    {"title.unlock_camera_rotation", "Controls"},
+    {"input.gamepad_layout", "Controls"},  // hidden with custom bindings
 };
 
 // The page for a row kLayout does not name.
 inline std::string PageSection(const std::string& section) {
-    if (section == "Game") return "Quality of life";
     if (section == "Input") return "Controls";
+    if (section == "Game" || section == "Audio" || section == "Netplay")
+        return "General";
     return section;
 }
 
@@ -171,8 +172,7 @@ inline std::string ValueText(const Model& model, const NdsTitleMenuRow& row) {
         return std::to_string(value);
     default: {
         const bool percent = row.key == "audio.volume" ||
-                             row.key == "display.second_screen_size" ||
-                             row.key == "input.mouse_sensitivity";
+                             row.key == "display.second_screen_size";
         return std::to_string(value) + (percent ? "%" : "");
     }
     }
