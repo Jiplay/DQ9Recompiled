@@ -22,9 +22,10 @@ resolution_scale = 100
 # detail. NDS_PERFORMANCE_GOVERNOR / --performance-governor override it.
 performance_governor = "off"  # auto | off | stage1 | stage2
 # The other screen, right of the main one and bottom-aligned (below it,
-# centred, in a portrait window), as a % of its size (5..60). A
-# minimum: in letterbox it grows into any space left over. Also in the Esc menu.
-second_screen_size = 25
+# centred, in a portrait window), as a % of its size (10..100; 100 is the
+# main screen's size). A minimum: in letterbox it grows into any space left
+# over. Also under Options > Display.
+second_screen_size = 30
 
 [system]
 startup_mode = "automatic"
