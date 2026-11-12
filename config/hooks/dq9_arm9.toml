@@ -402,7 +402,7 @@ mode = "arm"
 name = "Dq9TextInstant"
 registers = ["r4"]
 
-# 3D frame rate, part 2: the 2D message window. 0x020439C0(mgr, flag), once
+# 60 FPS mode, Accurate, part 2: the 2D message window. 0x020439C0(mgr, flag), once
 # per pass of the main loop (ov17 0x0218C910), redoes the window while its
 # text is appearing: lays the whole text out again (0x02066D00), draws the
 # frame and uploads the 18 KB tile buffer.

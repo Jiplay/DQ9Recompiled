@@ -1,6 +1,15 @@
-// 3D frame rate (Game > 3D frame rate, [title] frame_rate in settings.toml,
-// 30 FPS by default): lets the game's main loop draw a 3D image on every
-// VBlank instead of every second one.
+// 60 FPS mode (Game > 60 FPS mode, [title] fps_mode in settings.toml, Off
+// by default). It replaces the separate "3D frame rate" setting and the
+// runner's Smooth 3D row, which the smoothing query below hides.
+//
+//   Off       30 images a second, as the DS.
+//   Fast      30 images, and the runner's 3D smoothing (gpu3d_interp.h)
+//             shows the halfway image on each free frame: 60 on screen for
+//             the host cost of 30, 3D one frame late, may glitch.
+//   Accurate  the game draws 60 (below); needs about twice the host time.
+//
+// Accurate lets the game's main loop draw a 3D image on every VBlank instead
+// of every second one.
 //
 // The loop (ov17 0x0218B710, the field, towns and battles) ends each pass
 // with
@@ -22,8 +31,8 @@
 // On the DS's ARM9 a pass takes about one VBlank, so the rate would flip
 // between 60 and 30. 60 FPS therefore also runs the emulated ARM9 at twice
 // its hardware clock (nds_title_set_arm9_overclock), which holds 60 in towns
-// too; timers, sound and the ARM7 keep the hardware's timing. 30 FPS puts
-// the hardware clock back.
+// too; timers, sound and the ARM7 keep the hardware's timing. Off and Fast
+// put the hardware clock back.
 //
 // While a dialogue box is open the loop also reads the cartridge on every
 // pass (the polling read at 0x020D0BF8: about three quarters of the ARM9's
@@ -49,21 +58,29 @@
 
 namespace {
 
-constexpr const char* kChoices[] = {"30 FPS", "60 FPS"};
+enum FpsMode { kOff, kFast, kAccurate };
 
-constexpr NdsTitleSetting kFrameRate = {
-    "frame_rate",
-    "3D frame rate",
-    "60 FPS lets the game draw a 3D image on every screen refresh when it "
-    "is ready in time. 30 FPS is the original.",
-    0, 1, 1,
+constexpr const char* kChoices[] = {"Off", "Fast", "Accurate"};
+
+constexpr NdsTitleSetting kFpsMode = {
+    "fps_mode",
+    "60 FPS mode",
+    "Fast blends images in between (3D a frame late, may glitch). "
+    "Accurate draws them all; needs a fast PC.",
+    kOff, kAccurate, 1,
     kChoices, sizeof(kChoices) / sizeof(kChoices[0]), nullptr,
-    0,
+    kOff,
 };
 
-const int kFrameRateId = nds_title_setting_register(&kFrameRate);
+const int kFpsModeId = nds_title_setting_register(&kFpsMode);
 
-bool Fast() { return nds_title_setting_value(kFrameRateId) != 0; }
+// The game draws on every VBlank (Accurate).
+bool Draw60() { return nds_title_setting_value(kFpsModeId) == kAccurate; }
+
+// The runner smooths 3D while this is true (title_settings.h).
+bool Smooth() { return nds_title_setting_value(kFpsModeId) == kFast; }
+
+const bool kSmoothRegistered = (nds_title_set_smooth_3d_query(Smooth), true);
 
 // The return address of the main loop's call of 0x020439C0 (ov17
 // 0x0218C910): the other callers run their own loops.
@@ -87,11 +104,11 @@ bool g_skip_tile_upload = false;
 // Before `b 0x0218C798` at 0x0218C78C: r0 = VBlanks since the last pass,
 // r7 = 2 - r0 = the loop's bound (it waits while 1 <= i < r7).
 NDS_TITLE_HOOK void Dq9FrameRate(uint32_t* r0, uint32_t* r7) {
-    const bool fast = Fast();
-    nds_title_set_arm9_overclock(fast ? 2 : 1);
-    nds_title_set_card_speedup(fast ? 16 : 1);
-    nds_title_set_event_windows(fast);
-    if (fast) *r7 = 1u - *r0;
+    const bool draw60 = Draw60();
+    nds_title_set_arm9_overclock(draw60 ? 2 : 1);
+    nds_title_set_card_speedup(draw60 ? 16 : 1);
+    nds_title_set_event_windows(draw60);
+    if (draw60) *r7 = 1u - *r0;
 }
 
 // Before `beq 0x02043E94` at 0x020439DC: r2 != 0 while the 2D message window
@@ -105,7 +122,7 @@ NDS_TITLE_HOOK bool Dq9TextWindowHalfRate(uint32_t* r2, uint32_t* r10,
                                           uint32_t* lr) {
     g_skip_tile_upload = false;
     if (*lr != kMainLoopTextDraw) return false;
-    if (!Fast() || *r2 == 0u || g_text_window_skipped) {
+    if (!Draw60() || *r2 == 0u || g_text_window_skipped) {
         g_text_window_skipped = false;
         return false;
     }
@@ -162,7 +179,7 @@ uint32_t CmpFlags(uint32_t a, uint32_t b) {
 // `bx lr`), leaving r0-r3 and NZCV as the guest code would.
 NDS_TITLE_HOOK bool Dq9HeapBlockLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                        uint32_t* r3, uint32_t* cpsr) {
-    if (!Fast()) return false;
+    if (!Draw60()) return false;
     const uint32_t nzcv_mask = kCpsrN | kCpsrZ | kCpsrC | kCpsrV;
     const uint32_t off = *r1 - bus_read_u32(kHeapBaseLiteral);
     *r2 = off;
@@ -198,7 +215,7 @@ NDS_TITLE_HOOK bool Dq9KerningLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                      uint32_t* r3, uint32_t* r12,
                                      uint32_t* cpsr) {
     constexpr uint32_t kFontTable = 0x0210782Cu;
-    if (!Fast()) return false;
+    if (!Draw60()) return false;
     const uint32_t nzcv_mask = kCpsrN | kCpsrZ | kCpsrC | kCpsrV;
     const uint32_t key = ((*r0 & 0xFFu) | ((*r1 << 24) >> 16)) & 0xFFFFu;
     const uint32_t font = bus_read_u32(kFontTable + (*r2 << 2));
@@ -238,7 +255,7 @@ int32_t S16(uint32_t v) { return static_cast<int16_t>(static_cast<uint16_t>(v));
 // sp are as the guest leaves them; r1, r3 and r12 get their final values.
 NDS_TITLE_HOOK bool Dq9Blit4bpp(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                 uint32_t* r3, uint32_t* r12, uint32_t* sp) {
-    if (!Fast()) return false;
+    if (!Draw60()) return false;
     if (*r1 == 0u) return true;
     const uint32_t desc = *r0;
     const int32_t w = static_cast<int32_t>(bus_read_u32(*sp + 0u));
@@ -318,7 +335,7 @@ constexpr uint32_t kGxFifo = 0x04000400u;
 // outside main RAM, run the guest loop.
 NDS_TITLE_HOOK bool Dq9GxFifoSend(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                   uint32_t* r12, uint32_t* cpsr) {
-    if (!Fast() || *r1 != kGxFifo) return false;
+    if (!Draw60() || *r1 != kGxFifo) return false;
     const uint32_t src = *r0;
     const uint32_t end = src + *r2;
     if (static_cast<int32_t>(*r2) <= 0 || (src & 3u) != 0u ||
@@ -371,7 +388,7 @@ constexpr uint32_t kGeDirectMaxParams = 32u;
 // callers (compiled C); the result leaves r4-r6 untouched, as the pop would.
 NDS_TITLE_HOOK bool Dq9GeBufferCommand(uint32_t* r0, uint32_t* r1,
                                        uint32_t* r2) {
-    if (!Fast()) return false;
+    if (!Draw60()) return false;
     const uint32_t cmd = *r0;
     const uint32_t params = *r1;
     const uint32_t n = *r2;
@@ -406,5 +423,5 @@ NDS_TITLE_HOOK bool Dq9GeBufferCommand(uint32_t* r0, uint32_t* r1,
 // ARM9 until the test is done instead (the same guest time passes); the
 // guest's next poll then reads the result.
 NDS_TITLE_HOOK void Dq9BoxTestWait() {
-    if (Fast()) nds_title_wait_gx_test();
+    if (Draw60()) nds_title_wait_gx_test();
 }
