@@ -22,7 +22,7 @@
             android:name="com.birabittoh.dq9recomp.DQ9RecompActivity"
             android:label="DQ9Recomp"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode"
-            android:screenOrientation="sensor"
+            android:screenOrientation="fullSensor"
             android:exported="true"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
 
