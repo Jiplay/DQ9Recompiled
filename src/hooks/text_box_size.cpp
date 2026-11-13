@@ -73,6 +73,30 @@ constexpr int kAnchorY = 96;
 using dq9::FullScreenPage;
 using dq9::LoadedOverlay;
 
+// Only in the game proper (field, battle, camp menu). The boot sequence and
+// the title menu draw their art on the same BGs and are left as on the DS.
+// The main loop (0x02000C9C) switches on the mode byte at ctx+4 (ctx =
+// 0x020F33D8, read by 0x0200FBAC): modes 0, 4, 5 and 9 run the game
+// (0x020D6CC4 with overlay 17); the boot and title screens run in mode 6.
+// Overlay 17 itself is already loaded on the title, so it cannot tell them
+// apart.
+//
+// Continue sets mode 0 at once, but the title's fade-out still runs from
+// overlay 4 after that, so the game also needs overlay 4 gone from its slot.
+// Overlays 0..6 share slot 0 (see LoadedOverlay), and the field loads
+// another one there (battle: overlay 0).
+constexpr uint32_t kMainMode = 0x020F33D8 + 4;
+constexpr uint32_t kTitleSlot = 0;
+constexpr int kTitleOverlay = 4;
+
+bool InGame() {
+    switch (bus_read_u8(kMainMode)) {
+        case 0: case 4: case 5: case 9: break;
+        default: return false;
+    }
+    return LoadedOverlay(kTitleSlot) != kTitleOverlay && !FullScreenPage();
+}
+
 }  // namespace
 
 // ---- 3D message window -----------------------------------------------------
@@ -118,7 +142,10 @@ constexpr uint32_t kMtxTrans = 0x04000470;
 // The 3D window's scale, fx32 (kOne = unchanged).
 int32_t TextBoxScale() {
     const int raster = nds_gpu3d_internal_scale();
-    if (raster <= 1 || FullScreenPage()) return kOne;
+    // On the title (its prompts, the adventure log delete confirmation
+    // among them, use the 3D window too) the UI stays as on the DS, like the
+    // 2D layers below.
+    if (raster <= 1 || !InGame()) return kOne;
     int32_t k = static_cast<int32_t>(UiScale() * kOne + 0.5);
     const int32_t sharp = (kOne + raster - 1) / raster;
     if (k < sharp) k = sharp;
@@ -352,30 +379,6 @@ namespace {
 constexpr uint8_t kWindowBgs = 0x1E;
 // The OBJs alone.
 constexpr uint8_t kWindowObjs = 0x10;
-
-// Only in the game proper (field, battle, camp menu). The boot sequence and
-// the title menu draw their art on the same BGs and are left as on the DS.
-// The main loop (0x02000C9C) switches on the mode byte at ctx+4 (ctx =
-// 0x020F33D8, read by 0x0200FBAC): modes 0, 4, 5 and 9 run the game
-// (0x020D6CC4 with overlay 17); the boot and title screens run in mode 6.
-// Overlay 17 itself is already loaded on the title, so it cannot tell them
-// apart.
-//
-// Continue sets mode 0 at once, but the title's fade-out still runs from
-// overlay 4 after that, so the game also needs overlay 4 gone from its slot.
-// Overlays 0..6 share slot 0 (see LoadedOverlay), and the field loads
-// another one there (battle: overlay 0).
-constexpr uint32_t kMainMode = 0x020F33D8 + 4;
-constexpr uint32_t kTitleSlot = 0;
-constexpr int kTitleOverlay = 4;
-
-bool InGame() {
-    switch (bus_read_u8(kMainMode)) {
-        case 0: case 4: case 5: case 9: break;
-        default: return false;
-    }
-    return LoadedOverlay(kTitleSlot) != kTitleOverlay && !FullScreenPage();
-}
 
 // Whether a 2D window is up on engine A: every one turns BG2 on (the 2D
 // message box uses BG2 + BG3, the camp menu BG1 + BG2), while the field
