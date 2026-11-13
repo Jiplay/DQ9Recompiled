@@ -259,7 +259,7 @@ jobs:
             -DNDS_TITLE_ROM_SHA1="$ROM_SHA1" \
             -DNDS_TITLE_CONFIG="$PWD/game.toml" \
             -DNDS_INTERPRETER=OFF -DNDS_RETAIL_BIOS_BANKS=OFF -DNDS_EMBED_DUMPS_DIR= \
-            -DNDS_ONLINE=OFF \
+            -DNDS_ONLINE=ON -DNDS_RECOMP_NET_ROOT="$PWD/recomp-net" \
             -DNDS_UPDATE_REPO=birabittoh/DQ9Recompiled \
             "-DNDS_UPDATE_ASSET_FORMAT=DQ9Recomp-{tag}-{platform}" \
             "-DNDS_TITLE_HOOK_SOURCES=$hooks"
