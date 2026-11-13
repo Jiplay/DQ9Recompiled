@@ -21,7 +21,7 @@ resolution_scale = 100
 # auto drops 3D to 1x while frames wait on the GPU; off keeps the chosen
 # detail. NDS_PERFORMANCE_GOVERNOR / --performance-governor override it.
 performance_governor = "off"  # auto | off | stage1 | stage2
-# The other screen, right of the main one and bottom-aligned (below it,
+# The other screen, right of the main one and bottom-aligned (above it,
 # centred, in a portrait window), as a % of its size (10..100; 100 is the
 # main screen's size). A minimum: in letterbox it grows into any space left
 # over. Also under Options > Display.
