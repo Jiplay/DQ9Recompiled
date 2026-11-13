@@ -51,6 +51,12 @@
 // on that host. Dq9TextWindowHalfRate skips that redraw on every other pass
 // of the main loop, so the window is redrawn 30 times a second as in the
 // original while 3D stays at 60 (except while a choice list is shown).
+//
+// The hooks that only do the guest's work natively (heap lookup, kerning,
+// 4bpp blit, GXFIFO send, geometry command buffer, box-test wait) run in
+// every mode: Off in a town needed 20 ms a frame on a Snapdragon 7s Gen 3
+// without them. The pacing, clocks, event windows and the half-rate text
+// window stay Accurate-only.
 #include "gpu3d.h"
 #include "io.h"
 #include "title_hooks.h"
@@ -175,11 +181,10 @@ uint32_t CmpFlags(uint32_t a, uint32_t b) {
 
 // At the entry of the ITCM lookup 0x01FF88C4 (r1 = a pointer into the heap):
 // returns r0 = the live block entry whose offset is r1 - base, or 0. At
-// 60 FPS it runs the search natively and returns true (the bank then does
+// every mode it runs the search natively and returns true (the bank then does
 // `bx lr`), leaving r0-r3 and NZCV as the guest code would.
 NDS_TITLE_HOOK bool Dq9HeapBlockLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                        uint32_t* r3, uint32_t* cpsr) {
-    if (!Draw60()) return false;
     const uint32_t nzcv_mask = kCpsrN | kCpsrZ | kCpsrC | kCpsrV;
     const uint32_t off = *r1 - bus_read_u32(kHeapBaseLiteral);
     *r2 = off;
@@ -208,14 +213,13 @@ NDS_TITLE_HOOK bool Dq9HeapBlockLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
 
 // At the entry of the kerning search 0x020425F4(prev = r0, cur = r1,
 // font = r2): r0 = the signed adjustment of the pair (prev & 0xFF) |
-// (cur << 8) in the font's table, or 0. At 60 FPS it scans natively and
+// (cur << 8) in the font's table, or 0. It scans natively and
 // returns true (the bank then does `bx lr`), leaving r0-r3, r12 and NZCV as
 // the guest code would.
 NDS_TITLE_HOOK bool Dq9KerningLookup(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                      uint32_t* r3, uint32_t* r12,
                                      uint32_t* cpsr) {
     constexpr uint32_t kFontTable = 0x0210782Cu;
-    if (!Draw60()) return false;
     const uint32_t nzcv_mask = kCpsrN | kCpsrZ | kCpsrC | kCpsrV;
     const uint32_t key = ((*r0 & 0xFFu) | ((*r1 << 24) >> 16)) & 0xFFFFu;
     const uint32_t font = bus_read_u32(kFontTable + (*r2 << 2));
@@ -250,12 +254,11 @@ int32_t S16(uint32_t v) { return static_cast<int16_t>(static_cast<uint16_t>(v));
 // At the entry of the 4bpp blitter 0x0204E1D8: r0 = the buffer descriptor,
 // r1 = the source bitmap (one byte per pair of pixels), r2 = x, r3 = y; on the
 // stack w, h, the source mask for odd columns and the one for even columns.
-// At 60 FPS it runs the guest loop natively, step for step, and returns true
+// It runs the guest loop natively, step for step, and returns true
 // (the bank then does `bx lr`, as the original's pop {pc}). r0, r4-r11 and
 // sp are as the guest leaves them; r1, r3 and r12 get their final values.
 NDS_TITLE_HOOK bool Dq9Blit4bpp(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                 uint32_t* r3, uint32_t* r12, uint32_t* sp) {
-    if (!Draw60()) return false;
     if (*r1 == 0u) return true;
     const uint32_t desc = *r0;
     const int32_t w = static_cast<int32_t>(bus_read_u32(*sp + 0u));
@@ -327,7 +330,7 @@ constexpr uint32_t kGxFifo = 0x04000400u;
 // The 3D model renderer pushes its display lists into GXFIFO through it,
 // one guest load, store and MMIO write per word: in a town at 60 FPS this
 // loop and the bus path under it were the busiest MMIO site of the ARM9.
-// At 60 FPS the hook feeds the words to the geometry engine natively and
+// The hook feeds the words to the geometry engine natively and
 // returns, leaving r0, r2, r12 and NZCV as the loop would. It stops as soon
 // as the FIFO stalls (the engine's stall queue drops what is written past
 // it): r0 and r2 then hold the rest and the guest loop sends it, so the
@@ -335,7 +338,7 @@ constexpr uint32_t kGxFifo = 0x04000400u;
 // outside main RAM, run the guest loop.
 NDS_TITLE_HOOK bool Dq9GxFifoSend(uint32_t* r0, uint32_t* r1, uint32_t* r2,
                                   uint32_t* r12, uint32_t* cpsr) {
-    if (!Draw60() || *r1 != kGxFifo) return false;
+    if (*r1 != kGxFifo) return false;
     const uint32_t src = *r0;
     const uint32_t end = src + *r2;
     if (static_cast<int32_t>(*r2) <= 0 || (src & 3u) != 0u ||
@@ -381,14 +384,12 @@ constexpr uint32_t kGeDirectMaxParams = 32u;
 // 0x020B6ADC, before its push. With a buffer and busy set, it appends cmd and
 // the n parameter words when they fit in 0xC0 words; with no queued words
 // and busy clear it writes cmd to GXFIFO and sends the parameters through
-// MI_CpuSend32. Called for every geometry command of every model. At 60 FPS
-// the hook does those two paths natively and returns; a full buffer (flush
+// MI_CpuSend32. Called for every geometry command of every model. The hook does those two paths natively and returns; a full buffer (flush
 // through 0x020B69A8), a busy wait (0x020B6A04), a stalled FIFO and longer
 // parameter lists run the guest code. r0-r3 and r12 are scratch for the
 // callers (compiled C); the result leaves r4-r6 untouched, as the pop would.
 NDS_TITLE_HOOK bool Dq9GeBufferCommand(uint32_t* r0, uint32_t* r1,
                                        uint32_t* r2) {
-    if (!Draw60()) return false;
     const uint32_t cmd = *r0;
     const uint32_t params = *r1;
     const uint32_t n = *r2;
@@ -419,9 +420,9 @@ NDS_TITLE_HOOK bool Dq9GeBufferCommand(uint32_t* r0, uint32_t* r1,
 // 0x0207EA14), each `do r = G3X_GetBoxTestResult(&res); while (r != 0);`
 // right after the BOX_TEST write. The ARM9 spins there until the geometry
 // engine reaches the test, ~2,500 polls a frame in a town, each a call, a
-// dispatch and a GXSTAT read. At 60 FPS the hook has the scheduler hold the
+// dispatch and a GXSTAT read. The hook has the scheduler hold the
 // ARM9 until the test is done instead (the same guest time passes); the
 // guest's next poll then reads the result.
 NDS_TITLE_HOOK void Dq9BoxTestWait() {
-    if (Draw60()) nds_title_wait_gx_test();
+    nds_title_wait_gx_test();
 }
