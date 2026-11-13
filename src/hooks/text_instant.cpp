@@ -1,4 +1,5 @@
-// Instant text: holding B (or the right mouse button) while a message box is
+// Instant text: holding B (or the right mouse button, or two fingers on a
+// touchscreen, which the frontend reports as it) while a message box is
 // still printing its text prints the rest of the box at once, up to the next page break, wait or
 // choice (the game's own stops). See "Instant text" in
 // config/hooks/dq9_arm9.toml for the guest code behind the site.

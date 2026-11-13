@@ -2,7 +2,8 @@
 // it looks at. Game > Camera zoom picks Auto or Manual ([title] camera_mode
 // in settings.toml). Manual uses the percentage in Game > Manual camera
 // distance ([title] camera_distance, saved in any mode), which the mouse
-// wheel and the gamepad's right stick (up/down) change while Manual is on.
+// wheel, the gamepad's right stick (up/down) and a two-finger pinch on a
+// touchscreen change while Manual is on.
 // 100% leaves the game untouched. See config/hooks/dq9_arm9.toml for the
 // guest code.
 //
