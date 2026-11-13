@@ -75,5 +75,5 @@ d_title_language = "Langue des textes du jeu. Un menu ouvert change quand on le 
 d_title_ui_size = "Garde les bo<^i>tes de texte et menus <`a> taille fixe : une grande fen<^e>tre montre plus."
 d_title_mouse_friendly = "Surligne l'entr<'e>e sous la souris et la choisit d'un seul clic."
 d_title_fps_mode = "Rapide ajoute des images interm<'e>diaires (une image de retard). Pr<'e>cis les dessine toutes."
-d_netplay_enabled = "Local : le r<'e>seau local. En ligne : salons via le serveur de salons."
+d_netplay_enabled = "Local : le r<'e>seau local. En ligne : salons via le serveur de salons, et aussi le r<'e>seau local."
 d_netplay_account = "Le serveur de salons exige un compte Discord."

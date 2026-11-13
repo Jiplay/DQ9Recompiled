@@ -75,5 +75,5 @@ d_title_language = "Idioma de los textos. Un men<'u> abierto cambia al volver a 
 d_title_ui_size = "Mantiene cuadros de texto y men<'u>s a tama<~n>o fijo: una ventana grande muestra m<'a>s."
 d_title_mouse_friendly = "Resalta la entrada bajo el rat<'o>n y la elige con un solo clic."
 d_title_fps_mode = "R<'a>pido a<~n>ade im<'a>genes intermedias (un fotograma de retraso). Preciso las dibuja; requiere un PC r<'a>pido."
-d_netplay_enabled = "Local: la red local. En l<'i>nea: salas mediante el servidor de salas."
+d_netplay_enabled = "Local: la red local. En l<'i>nea: salas mediante el servidor de salas, y tambi<'e>n la red local."
 d_netplay_account = "El servidor de salas necesita una cuenta de Discord."

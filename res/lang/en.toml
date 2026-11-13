@@ -88,5 +88,5 @@ d_title_language = "The game's text language. A menu that is open changes when r
 d_title_ui_size = "Keeps text boxes and menus at a fixed size, so a big window shows more of the scene."
 d_title_mouse_friendly = "Highlights the entry under the mouse and chooses it with one click."
 d_title_fps_mode = "Fast blends images in between (3D a frame late, may glitch). Accurate draws them all; needs a fast PC."
-d_netplay_enabled = "Local: the local network. Online: lobbies through the lobby server."
+d_netplay_enabled = "Local: the local network. Online: lobbies through the lobby server, and the local network too."
 d_netplay_account = "The lobby server needs a Discord account."

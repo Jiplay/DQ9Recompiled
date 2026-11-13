@@ -75,8 +75,8 @@ pass `--local-wireless-peer <IP>`.
 
 **Netplay** (in progress, off by default): online lobbies through
 [recomp-net](https://github.com/RetroPortingToolKit/recomp-net). Turn it on from
-the Netplay section of the menu. Players see only the lobby server's relay
-address.
+the Netplay section of the menu; games on the local network still show up
+next to the lobbies. Players see only the lobby server's relay address.
 
 Two copies can play on one PC: `--instance 0` and `--instance 1` (separate saves).
 
