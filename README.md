@@ -46,7 +46,8 @@ next to the executable if a `portable.txt` file is there:
 | Windows | `Documents\DQ9Recomp` |
 | macOS | `~/Library/Application Support/DQ9Recomp` |
 
-Logs always go to `logs/` next to the executable.
+Logs go to `logs/` next to the executable. On macOS, or if that folder
+cannot be written, they go to `logs/` in the folder above.
 
 ### Updates
 
