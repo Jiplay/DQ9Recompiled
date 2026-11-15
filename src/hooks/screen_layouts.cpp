@@ -6,6 +6,9 @@
 // fade-out after Continue) uses both screens, so it is shown as on the DS,
 // the top screen above the touchscreen. Add a mode to Wanted() to give it
 // the same layout.
+//
+// In battle the second screen stays below the main one in a portrait window,
+// where the overworld and the other scenes put it above.
 #include <atomic>
 
 #include "title_hooks.h"
@@ -23,6 +26,7 @@ constexpr uint8_t kTitleMode = 6;
 // layouts during the fade-out. The mode byte is a single byte, safe to read
 // at any time, so the boot and the menu follow it at once.
 std::atomic<bool> g_title_at_swap{false};
+std::atomic<bool> g_battle_at_swap{false};
 
 // Called once per presented frame on the frontend thread.
 bool Wanted() {
@@ -30,7 +34,12 @@ bool Wanted() {
            g_title_at_swap.load(std::memory_order_relaxed);
 }
 
-const bool kRegistered = (nds_title_set_stacked_layout_query(Wanted), true);
+// Called once per presented frame on the frontend thread. Judged at the swap
+// like the title, since the overlay slots are inconsistent mid-load.
+bool InsetBelow() { return g_battle_at_swap.load(std::memory_order_relaxed); }
+
+const bool kRegistered = (nds_title_set_stacked_layout_query(Wanted),
+                          nds_title_set_inset_below_query(InsetBelow), true);
 
 }  // namespace
 
@@ -38,6 +47,7 @@ namespace dq9 {
 
 void SampleScreenLayout() {
     g_title_at_swap.store(TitleScreen(), std::memory_order_relaxed);
+    g_battle_at_swap.store(InBattle(), std::memory_order_relaxed);
 }
 
 }  // namespace dq9
