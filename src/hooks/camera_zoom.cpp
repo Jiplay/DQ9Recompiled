@@ -7,7 +7,7 @@
 // 100% leaves the game untouched. See config/hooks/dq9_arm9.toml for the
 // guest code.
 //
-// Auto (the default) follows the window: the distance grows with the height
+// Auto follows the window: the distance grows with the height
 // the main screen is shown at, so the characters keep the size they have in
 // the default 2x window and a bigger window shows more around them.
 //
@@ -47,7 +47,7 @@ constexpr NdsTitleSetting kCameraMode = {
     "mouse wheel or the right stick.",  // at most three lines in the pages
     0, 1, 1,
     kModeChoices, sizeof(kModeChoices) / sizeof(kModeChoices[0]), kModeValues,
-    kAuto,
+    kManual,
 };
 
 // Only used in Manual mode, but always kept (and saved).

@@ -17,8 +17,8 @@ Most of these have a switch under Game in the in-game menu (Esc); with the
 switch off, the game is untouched.
 
 * **Skip intros** (off by default): boots past the logos and the opening movie.
-* **Camera zoom**: Auto (the default, follows the window size) or Manual (mouse
-  wheel or right stick), plus **unlock camera rotation**.
+* **Camera zoom**: Manual (the default; mouse wheel or right stick) or Auto
+  (follows the window size), plus **unlock camera rotation**.
 * **UI size**: keeps text boxes and menus at a fixed size in big windows.
 * **Language**: switch between English, French, German, Italian and Spanish
   without a restart.
