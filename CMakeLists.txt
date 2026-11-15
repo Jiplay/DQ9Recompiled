@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(DQ9Recomp VERSION 0.0.1 LANGUAGES C CXX)
+project(DQ9Recompiled VERSION 0.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -276,7 +276,7 @@ if(NOT MSVC)
 endif()
 
 add_executable(dq9_romcheck src/main.cpp "${NDSRECOMP_ROOT}/recompiler/support/sha1.cpp")
-set_target_properties(dq9_romcheck PROPERTIES OUTPUT_NAME "DQ9Recomp")
+set_target_properties(dq9_romcheck PROPERTIES OUTPUT_NAME "DQ9Recompiled")
 target_include_directories(dq9_romcheck PRIVATE "${NDSRECOMP_ROOT}/recompiler/support")
 
-add_custom_target(dq9recomp DEPENDS dq9_romcheck dq9_recompiled_banks)
+add_custom_target(dq9recompiled DEPENDS dq9_romcheck dq9_recompiled_banks)

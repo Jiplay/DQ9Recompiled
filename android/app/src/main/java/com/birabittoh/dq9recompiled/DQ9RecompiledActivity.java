@@ -1,4 +1,4 @@
-package com.birabittoh.dq9recomp;
+package com.birabittoh.dq9recompiled;
 
 import org.libsdl.app.SDLActivity;
 
@@ -8,7 +8,7 @@ import org.libsdl.app.SDLActivity;
  * SDL_main). The self-updater reaches this activity over JNI for the
  * FileProvider and the package installer intent.
  */
-public class DQ9RecompActivity extends SDLActivity {
+public class DQ9RecompiledActivity extends SDLActivity {
 
     @Override
     protected String[] getLibraries() {

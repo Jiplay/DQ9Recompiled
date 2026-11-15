@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build DQ9Recomp end to end: venv, generated banks, then the runner.
+"""Build DQ9Recompiled end to end: venv, generated banks, then the runner.
 
 Runs the two CMake projects from the README (the bank generator in build/ and
 ndsrecomp's runner in build-runner/) with the per-platform flags each needs,
-then copies the runner to the repo root as DQ9Recomp[.exe].
+then copies the runner to the repo root as DQ9Recompiled[.exe].
 """
 import argparse
 import os
@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 ROM_SHA1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
-PROJECT_NAME = "DQ9Recomp"
+PROJECT_NAME = "DQ9Recompiled"
 BANK_BUILD_DIR = "build"
 RUNNER_BUILD_DIR = "build-runner"
 RECOMP_NET_DIR = "recomp-net"

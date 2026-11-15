@@ -48,7 +48,7 @@ jobs:
     uses: ./.github/workflows/_build.yml
     with:
       publish_mode: artifact
-      artifact_name: DQ9Recomp-${{ needs.prepare.outputs.tag_name }}
+      artifact_name: DQ9Recompiled-${{ needs.prepare.outputs.tag_name }}
       # Loose pkg/ payloads would collide once merged into one release.
       upload_packages: true
     secrets: inherit

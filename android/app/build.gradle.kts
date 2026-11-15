@@ -44,11 +44,11 @@ val appVersionCode: Int = run {
 }
 
 android {
-    namespace = "com.birabittoh.dq9recomp"
+    namespace = "com.birabittoh.dq9recompiled"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.birabittoh.dq9recomp"
+        applicationId = "com.birabittoh.dq9recompiled"
         minSdk = 28
         targetSdk = 35
         versionCode = appVersionCode

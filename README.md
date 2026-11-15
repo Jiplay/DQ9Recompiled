@@ -1,4 +1,4 @@
-# DQ9Recomp
+# DQ9Recompiled
 
 Static recompilation of **Dragon Quest IX: Sentinels of the Starry Skies**
 (Europe, `YDQP`, SHA-1 `ff761d349709f329c8ac4bd0023fdce21861e8a1`), built on the
@@ -13,28 +13,23 @@ on a recompiled FreeBIOS and a generated firmware.
 
 ## Features
 
-Most of these have a switch under Game in the in-game menu (Esc); with the
-switch off, the game is untouched.
-
-* **Skip intros** (off by default): boots past the logos and the opening movie.
-* **Camera zoom**: Manual (the default; mouse wheel or right stick) or Auto
-  (follows the window size), plus **unlock camera rotation**.
-* **UI size**: keeps text boxes and menus at a fixed size in big windows.
+* **Skip intros**: boots past the logos and the opening movie.
+* **Camera zoom**: Manual (mouse wheel, right stick, pinch to zoom) or Auto.
+* **Unlocked camera rotation**: you can now rotate it freely.
+* **UI size**: optimized text boxes and menus for big windows.
 * **Language**: switch between English, French, German, Italian and Spanish
   without a restart.
 * **Mouse-friendly menus**: hover to highlight, one click to choose.
 * **60 FPS mode**: Off, Fast or Accurate.
 * **Analog movement**: the left stick walks at any angle.
-* **Instant text**: hold B or the right mouse button to print the rest of a box.
-* **Options**: the Nintendo Wi-Fi row of the main menu and the camp menu's Misc.
-  list get an Options page, and the main menu gets Import and Export save file
-  rows.
+* **Instant text**: press B, the right mouse button or double tap to print instantly.
+* **Options**: every option is displayed natively in-game.
 * **Multiplayer**: local wireless over the LAN, and online lobbies with Netplay.
 
 ## Play
 
 ```bash
-./DQ9Recomp
+./DQ9Recompiled
 ```
 
 Settings and saves live in a per-user folder, or
@@ -42,22 +37,12 @@ next to the executable if a `portable.txt` file is there:
 
 | Platform | Folder |
 | --- | --- |
-| Linux | `~/.local/share/DQ9Recomp` |
-| Windows | `Documents\DQ9Recomp` |
-| macOS | `~/Library/Application Support/DQ9Recomp` |
+| Linux | `~/.local/share/DQ9Recompiled` |
+| Windows | `Documents\DQ9Recompiled` |
+| macOS | `~/Library/Application Support/DQ9Recompiled` |
 
 Logs go to `logs/` next to the executable. On macOS, or if that folder
 cannot be written, they go to `logs/` in the folder above.
-
-### Updates
-
-A release build shows its version in the bottom-left corner of the title
-menu and checks [the releases](https://github.com/birabittoh/DQ9Recompiled/releases)
-quietly at startup. When a newer one is out, the title menu gets an
-**Update to** row: it downloads the release, checks it against GitHub's
-checksum, replaces the files next to the executable and restarts into the new
-version (on Android it opens the system installer). Saves and settings live in
-the data folder and are left alone.
 
 ### Multiplayer
 
@@ -73,11 +58,6 @@ for each of the other PCs.
 opens the Rapportal and the others join from the inn in Stornway. Allow the
 runner through your firewall (UDP ports 26710-26725). If peers do not show up,
 pass `--local-wireless-peer <IP>`.
-
-**Netplay** (in progress, off by default): online lobbies through
-[recomp-net](https://github.com/RetroPortingToolKit/recomp-net). Turn it on from
-the Netplay section of the menu; games on the local network still show up
-next to the lobbies. Players see only the lobby server's relay address.
 
 Two copies can play on one PC: `--instance 0` and `--instance 1` (separate saves).
 
@@ -97,7 +77,7 @@ python3 scripts/build.py
 ```
 
 `python3 scripts/build.py --package` then packs the build as the release asset
-the updater looks for (`DQ9Recomp-<tag>-<platform>.zip`, `.tar.gz` on Linux,
+the updater looks for (`DQ9Recompiled-<tag>-<platform>.zip`, `.tar.gz` on Linux,
 `.dmg` on macOS). The version a build compares releases against is the newest
 `v*` tag (or `--version X.Y.Z`, or `NDS_VERSION_NAME`); with none, the updater
 is off.
@@ -112,7 +92,7 @@ If you already cloned without `--recursive`, run
 `git submodule update --init --recursive` first.
 
 This sets up a virtual environment, generates the banks from the ROM, builds the
-runner and copies it to `DQ9Recomp[.exe]`. The bank compile is large (about 1 GB
+runner and copies it to `DQ9Recompiled[.exe]`. The bank compile is large (about 1 GB
 of C), so keep `--jobs` at 6 or below on a small machine. `--help` lists the
 other options (`--release`, `--no-online`, `--no-hooks`, ...).
 

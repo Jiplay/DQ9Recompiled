@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Convert a DS save wrapper (.duc Action Replay, .dsv, padded .sav...) into
-the raw 64 KB image the runner reads (saves/DQ9Recomp.sav).
+the raw 64 KB image the runner reads (saves/DQ9Recompiled.sav).
 
 The save is region independent (same layout and charset for EU/US), so the
 conversion only strips whatever precedes the "DRAGON QUEST IX" marker and
@@ -9,8 +9,8 @@ keeps the 65536 bytes after it. Both slots' CRC32s are verified.
 The title menu's "Import save file" row does the same conversion in game
 (src/hooks/save_image.h).
 
-usage: convert_save.py INPUT [OUTPUT]   (default OUTPUT: saves/DQ9Recomp.sav
-under Documents/DQ9Recomp; an existing OUTPUT is backed up to OUTPUT.bak-N)
+usage: convert_save.py INPUT [OUTPUT]   (default OUTPUT: saves/DQ9Recompiled.sav
+under Documents/DQ9Recompiled; an existing OUTPUT is backed up to OUTPUT.bak-N)
 """
 import struct, sys, zlib
 from pathlib import Path
@@ -48,7 +48,7 @@ def main():
     if not check(img):
         print("warning: checksum mismatch, writing anyway")
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else \
-        Path.home() / "Documents/DQ9Recomp/saves/DQ9Recomp.sav"
+        Path.home() / "Documents/DQ9Recompiled/saves/DQ9Recompiled.sav"
     if out.exists():
         n = 1
         while out.with_name(f"{out.name}.bak-{n}").exists():

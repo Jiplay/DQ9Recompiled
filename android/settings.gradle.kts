@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "DQ9Recomp"
+rootProject.name = "DQ9Recompiled"
 include(":app")

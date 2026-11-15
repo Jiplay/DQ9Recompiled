@@ -1,4 +1,4 @@
-name: Build DQ9Recomp
+name: Build DQ9Recompiled
 
 on:
   workflow_call:
@@ -261,7 +261,7 @@ jobs:
             -DNDS_INTERPRETER=OFF -DNDS_RETAIL_BIOS_BANKS=OFF -DNDS_EMBED_DUMPS_DIR= \
             -DNDS_ONLINE=ON -DNDS_RECOMP_NET_ROOT="$PWD/recomp-net" \
             -DNDS_UPDATE_REPO=birabittoh/DQ9Recompiled \
-            "-DNDS_UPDATE_ASSET_FORMAT=DQ9Recomp-{tag}-{platform}" \
+            "-DNDS_UPDATE_ASSET_FORMAT=DQ9Recompiled-{tag}-{platform}" \
             "-DNDS_TITLE_HOOK_SOURCES=$hooks"
           cmake --build build-android --parallel 4 --target nds_runner
 
@@ -277,7 +277,7 @@ jobs:
           if [ "${{ inputs.publish_mode }}" = "artifact" ]; then
             out="${{ inputs.artifact_name }}-${{ matrix.platform }}"
           else
-            out="DQ9Recomp-${{ inputs.tag }}-${{ matrix.platform }}"
+            out="DQ9Recompiled-${{ inputs.tag }}-${{ matrix.platform }}"
           fi
           python scripts/build.py --package "${out}"
 
@@ -293,7 +293,7 @@ jobs:
             out="${{ inputs.artifact_name }}-${{ matrix.platform }}"
             version="0.0.0"
           else
-            out="DQ9Recomp-${{ inputs.tag }}-${{ matrix.platform }}"
+            out="DQ9Recompiled-${{ inputs.tag }}-${{ matrix.platform }}"
             version="$(echo "${{ inputs.tag }}" | sed 's/^v//')"
           fi
           python scripts/package-mac.py --name "${out}" --version "${version}"
@@ -329,7 +329,7 @@ jobs:
           if [ "${{ inputs.publish_mode }}" = "artifact" ]; then
             name="${{ inputs.artifact_name }}-${{ matrix.platform }}"
           else
-            name="DQ9Recomp-${{ inputs.tag }}-${{ matrix.platform }}"
+            name="DQ9Recompiled-${{ inputs.tag }}-${{ matrix.platform }}"
           fi
 
           JNI_DIR="$PWD/android/app/jniLibs/arm64-v8a"

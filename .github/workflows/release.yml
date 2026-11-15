@@ -37,7 +37,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "DQ9Recomp ${{ github.ref_name }}"
+          name: "DQ9Recompiled ${{ github.ref_name }}"
           body: "You must own the game: put your Europe (YDQP) ROM next to the executable on first launch. See the [README](https://github.com/${{ github.repository }}#readme).\n\n"
           files: release-assets/*
           generate_release_notes: true

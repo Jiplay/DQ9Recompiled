@@ -11,18 +11,18 @@
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
 
     <application
-        android:label="DQ9Recomp"
+        android:label="DQ9Recompiled"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:hasCode="true"
         android:appCategory="game"
         android:isGame="true">
 
-        <!-- DQ9RecompActivity extends SDL3's SDLActivity and names the native
+        <!-- DQ9RecompiledActivity extends SDL3's SDLActivity and names the native
              libraries to load (see getLibraries()). -->
         <activity
-            android:name="com.birabittoh.dq9recomp.DQ9RecompActivity"
-            android:label="DQ9Recomp"
+            android:name="com.birabittoh.dq9recompiled.DQ9RecompiledActivity"
+            android:label="DQ9Recompiled"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode"
             android:screenOrientation="fullSensor"
             android:exported="true"

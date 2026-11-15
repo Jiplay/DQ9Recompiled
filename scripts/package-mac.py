@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Packages the built macOS executable as an .app inside a .dmg.
 
-Run after build.py, which leaves DQ9Recomp in the repo root; this only
+Run after build.py, which leaves DQ9Recompiled in the repo root; this only
 assembles. `build.py --package` calls it on macOS.
 
 The self-updater downloads the .dmg, copies the .app out of it with ditto and
@@ -24,9 +24,9 @@ import sys
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-PROJECT_NAME = "DQ9Recomp"
-BUNDLE_ID = "com.birabittoh.dq9recomp"
-DISPLAY_NAME = "DQ9Recomp"
+PROJECT_NAME = "DQ9Recompiled"
+BUNDLE_ID = "com.birabittoh.dq9recompiled"
+DISPLAY_NAME = "DQ9Recompiled"
 # The oldest macOS the runner is built for (CMake's default deployment target
 # on the CI runners).
 MINIMUM_SYSTEM_VERSION = "13.0"
