@@ -53,7 +53,8 @@ void SampleScreenLayout();
 // text_box_size.cpp, InGame).
 inline bool InBattle() { return LoadedOverlay(0) == 0; }
 
-// The battle records pages (see FullScreenPage). The battle records (camp
+// The battle records pages (see FullScreenPage), with the Alchenomicon
+// and the accolade popup (below). The battle records (camp
 // menu > Battle records, overlay 8 in slot 1; the field and the camp menu have overlay 11 there) fill engine A
 // with a wallpaper on BG1 (screen base 30), draw the buttons, the cursor
 // and "Back" as OBJs, and Stella and her speech box in 3D on BG0, blended
@@ -68,18 +69,36 @@ inline bool InBattle() { return LoadedOverlay(0) == 0; }
 // back to 0 (0x0004) as soon as the page closes; the camp menu uses 28 and
 // 29. The blend is checked too: BLDCNT = 0x0241 (alpha, BG0 over BG1).
 // Reading these registers has no side effects.
+//
+// The "awarded the accolade" popup, shown over the records page as it
+// opens, keeps BG1 on base 30 and draws its frame on BG3 (0x1D08), dimming
+// the rest with a brightness fade: BLDCNT = 0x00D7 while it is up.
+//
+// The Alchenomicon (records page > Alchenomicon) loads overlay 6 in slot 0,
+// with the records overlay still in slot 1, and sets BG1CNT 0x1D00 (BG2
+// 0x1E01, BG3 0x1F0B; BLDCNT 0x0144). The field keeps 0x0004 there after
+// it closes.
 inline bool RecordsPage() {
+    constexpr uint32_t kFieldSlot = 0;
     constexpr uint32_t kMenuSlot = 1;
     constexpr int kRecordsOverlay = 8;
     constexpr int kMonsterListOverlay = 14;
+    constexpr int kAlchenomiconOverlay = 6;
     constexpr uint32_t kBg1cntA = 0x0400000A;
     constexpr uint32_t kBldcntA = 0x04000050;
     constexpr uint16_t kPageBlend = 0x0241;
+    constexpr uint16_t kAccoladeBlend = 0x00D7;
+    constexpr uint16_t kAlchenomiconBg1 = 0x1D00;
     const int menu = LoadedOverlay(kMenuSlot);
     if (menu != kRecordsOverlay && menu != kMonsterListOverlay) return false;
-    const int screen_base = (bus_read_u16(kBg1cntA) >> 8) & 0x1F;
-    return (screen_base == 30 || screen_base == 31) &&
-           bus_read_u16(kBldcntA) == kPageBlend;
+    const uint16_t bg1 = bus_read_u16(kBg1cntA);
+    if (menu == kRecordsOverlay && bg1 == kAlchenomiconBg1 &&
+        LoadedOverlay(kFieldSlot) == kAlchenomiconOverlay)
+        return true;
+    const int screen_base = (bg1 >> 8) & 0x1F;
+    if (screen_base != 30 && screen_base != 31) return false;
+    const uint16_t blend = bus_read_u16(kBldcntA);
+    return blend == kPageBlend || blend == kAccoladeBlend;
 }
 
 // Character pages: the Attributes page (below), the equipment screen (camp menu > Equipment, overlay 5
