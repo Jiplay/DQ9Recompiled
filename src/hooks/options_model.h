@@ -32,6 +32,7 @@ struct Model {
     std::map<std::string, uint32_t> cursor;  // per page
     // Values asked for and not yet in the frontend's rows.
     std::map<std::string, int> pending;
+    std::string signature;  // of the rows as the page last drew them
 };
 
 inline std::string Slug(const std::string& text) {
@@ -72,6 +73,9 @@ inline bool Hidden(const NdsTitleMenuRow& row) {
     if (row.section == "System") return true;
     // The game has its own volume settings.
     if (row.key == "audio.volume") return true;
+    // The Netplay choice is always shown (its description says whether the
+    // lobby server is up); the account row only while a sign-in is wanted or
+    // held, which `enabled` tells.
     if (row.key.rfind("netplay.", 0) == 0)
         return IsNetplayToggle(row) ? false
                                     : !IsNetplayAccount(row) || !row.enabled;
@@ -195,11 +199,34 @@ inline std::string ValueText(const Model& model, const NdsTitleMenuRow& row) {
     }
 }
 
+// The account row's label, which the runner words in English and changes with
+// the sign-in (netplay_menu.cpp refresh_label): each wording has its key.
+inline std::string AccountText(const std::string& label) {
+    if (label == "Sign in with Discord")
+        return Text("account_sign_in", label);
+    if (label == "Signing in: see the browser")
+        return Text("account_signing_in", label);
+    if (label == "Press again to sign out")
+        return Text("account_confirm", label);
+    const std::string head = "Sign out (";
+    if (label.size() > head.size() && label.compare(0, head.size(), head) == 0 &&
+        label.back() == ')') {
+        std::string text = Text("account_sign_out", "Sign out ({})");
+        const size_t at = text.find("{}");
+        if (at != std::string::npos)
+            text.replace(at, 2, label.substr(head.size(),
+                                             label.size() - head.size() - 1));
+        return text;
+    }
+    return label;
+}
+
 inline std::string RowText(const Model& model, const Row& row) {
     switch (row.kind) {
     case Row::Kind::Category:
         return Text("cat_" + Slug(row.section), row.section);
     case Row::Kind::Item:
+        if (IsNetplayAccount(row.item)) return AccountText(row.item.label);
         if (row.item.type == NdsTitleMenuRowType::Action)
             return Text(Slug(row.item.key), row.item.label);
         return Text(Slug(row.item.key), row.item.label) + ": " +
@@ -216,6 +243,10 @@ inline std::string DescriptionText(const Row& row) {
         return Text("d_cat_" + Slug(row.section), "");
     case Row::Kind::Item:
         if (Locked(row.item)) return Text("d_locked_by_host", "Set by the host.");
+        if (IsNetplayToggle(row.item))  // its description is the server's state
+            return Text("d_netplay_enabled", "") + " " +
+                   Text("server_status", "Server status:") + " " +
+                   Text("server_" + row.item.description, row.item.description);
         return Text("d_" + Slug(row.item.key), row.item.description);
     default:
         return "";
@@ -287,6 +318,19 @@ inline void BuildRows(Model& model, size_t max_rows, bool back = true) {
         }
     }
     if (back) model.rows.emplace_back();
+}
+
+// What the page shows (every row's text and description), to tell when the
+// frontend's rows changed under it (the Netplay account, the server status).
+inline std::string Signature(const Model& model) {
+    std::string out;
+    for (const Row& row : model.rows) {
+        out += RowText(model, row);
+        out += '\x01';
+        out += DescriptionText(row);
+        out += '\x02';
+    }
+    return out;
 }
 
 inline bool SetValue(Model& model, const NdsTitleMenuRow& row, int value) {

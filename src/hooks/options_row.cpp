@@ -240,6 +240,7 @@ struct Menu : Model {
     uint32_t scene = 0;
     uint32_t grid = 0;
     uint32_t described = ~0u;  // the row the description is of
+    uint32_t polled = 0;       // frames, to look for changed rows now and then
     uint8_t saved_grid[kGridSavedEnd - kGridSavedBegin] = {};
 };
 
@@ -296,6 +297,7 @@ void ShowDescription() {
 void ShowPage() {
     const uint32_t scene = g_menu.scene, grid = g_menu.grid;
     BuildRows(g_menu, kMaxRows);
+    g_menu.signature = Signature(g_menu);
     uint32_t count = 0;
     for (uint32_t i = 0; i < kMaxRows; ++i) {
         const uint32_t cell = FindTyped(scene, kFirstCell + i, kTypeCell);
@@ -638,6 +640,16 @@ void Frame(uint32_t scene) {
         return;
     }
     bus_write_u32(scene + kSceneIdleTime, 0u);
+    // Rows the frontend changed on its own (signing in or out, the lobby
+    // server's state) redraw the page; a few times a second is enough.
+    if (++g_menu.polled % 10 == 0) {
+        Model probe = g_menu;
+        BuildRows(probe, kMaxRows);
+        if (Signature(probe) != g_menu.signature) {
+            ShowPage();
+            return;
+        }
+    }
     if (bus_read_u16(g_menu.grid + kGridRow) != g_menu.described)
         ShowDescription();
     // The scene step skips its every-frame handler while one is running.
