@@ -84,6 +84,21 @@ jobs:
           fetch-tags: true
           fetch-depth: 0
 
+      # Changes to recomp-net it does not have yet (patches/). build.py does
+      # the same for the desktop legs; the Android leg configures CMake
+      # itself. A patch already in the tree is skipped.
+      - name: Patch recomp-net
+        shell: bash
+        run: |
+          for p in patches/recomp-net-*.patch; do
+            [ -e "$p" ] || continue
+            if git -C recomp-net apply --check --reverse "$PWD/$p" 2>/dev/null; then
+              echo "$p already applied"
+            else
+              git -C recomp-net apply "$PWD/$p"
+            fi
+          done
+
       - name: Skip (Android build not enabled)
         if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD != 'true'
         run: echo "::notice::android-arm64 skipped; set the ANDROID_BUILD repository variable to 'true' once the runner builds for Android."

@@ -1,0 +1,17 @@
+diff --git a/src/auth/rnet_auth.c b/src/auth/rnet_auth.c
+index 984f133..7183db5 100644
+--- a/src/auth/rnet_auth.c
++++ b/src/auth/rnet_auth.c
+@@ -477,7 +477,11 @@ static void job_login(void) {
+             g.state = RNET_ACCOUNT_SIGNED_IN;
+             return;
+         }
+-        if (st == 202) {
++        /* st < 0: the request itself failed (no route, a timeout, a reset).
++         * That says nothing about the sign-in: a phone that sends the game to
++         * the background for the browser can lose its network for a while, and
++         * the server keeps the result until the code expires. Keep polling. */
++        if (st == 202 || st < 0) {
+             /* Sleep in slices so a Retry is noticed in well under a second
+              * rather than after the poll interval. */
+             int slice;

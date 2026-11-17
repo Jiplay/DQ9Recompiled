@@ -178,6 +178,9 @@ dependencies {
     // FileProvider only; the self-updater resolves it through the activity's
     // class loader (ndsrecomp/runner/src/update/self_update_android.cpp).
     implementation("androidx.core:core:1.13.1")
+    // Custom Tabs: the Discord sign-in page opens over the game rather than
+    // in a full browser (DQ9RecompiledActivity.openCustomTab).
+    implementation("androidx.browser:browser:1.8.0")
     if (discordSdkAar.isFile) {
         implementation(files(discordSdkAar))
     }

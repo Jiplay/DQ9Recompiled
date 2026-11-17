@@ -94,6 +94,33 @@ def cmake_path(path):
     return os.path.abspath(path).replace("\\", "/")
 
 
+def apply_recomp_net_patches():
+    """Applies patches/recomp-net-*.patch to the recomp-net submodule.
+
+    Changes we need from recomp-net that it does not have yet. A patch that
+    is already in the tree (a rerun, or a recomp-net that has the change) is
+    skipped, so this is safe on every build.
+    """
+    patch_dir = "patches"
+    if not os.path.isdir(patch_dir):
+        return
+    for name in sorted(os.listdir(patch_dir)):
+        if not (name.startswith("recomp-net-") and name.endswith(".patch")):
+            continue
+        patch = os.path.abspath(os.path.join(patch_dir, name))
+        already = subprocess.run(
+            ["git", "-C", RECOMP_NET_DIR, "apply", "--check", "--reverse", patch],
+            capture_output=True).returncode == 0
+        if already:
+            continue
+        applied = subprocess.run(
+            ["git", "-C", RECOMP_NET_DIR, "apply", patch], capture_output=True)
+        if applied.returncode != 0:
+            die(f"{name} does not apply to {RECOMP_NET_DIR}/: "
+                f"{applied.stderr.decode(errors='replace').strip()}")
+        print(f"applied {name} to {RECOMP_NET_DIR}/")
+
+
 def check_deps():
     missing = [dep for dep in ("cmake", "ninja") if shutil.which(dep) is None]
     if missing:
@@ -363,6 +390,9 @@ def main():
         submodules.append(os.path.join(RECOMP_NET_DIR, "include", "recomp_net", "auth.h"))
     if not all(os.path.exists(path) for path in submodules):
         die("submodules missing: run `git submodule update --init --recursive`")
+
+    if args.online and not args.recomp_net:
+        apply_recomp_net_patches()
 
     check_deps()
     compilers = find_clang()

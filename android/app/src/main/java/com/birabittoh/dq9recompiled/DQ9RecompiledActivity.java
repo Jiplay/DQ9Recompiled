@@ -1,8 +1,12 @@
 package com.birabittoh.dq9recompiled;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+
+import androidx.browser.customtabs.CustomTabsIntent;
 
 import org.libsdl.app.SDLActivity;
 
@@ -18,6 +22,36 @@ public class DQ9RecompiledActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         initDiscord(this);
         super.onCreate(savedInstanceState);
+    }
+
+    /**
+     * Opens an http(s) page in a Custom Tab (the browser's trimmed-down view
+     * over the game, with "open in browser" in its menu). The native Discord
+     * sign-in (ndsrecomp/runner/src/net/open_url_android.cpp) calls this over
+     * JNI from its worker thread. Returns false when it could not, so the
+     * caller can fall back to a plain browser.
+     */
+    public boolean openCustomTab(final String url) {
+        final Uri uri = Uri.parse(url);
+        final String scheme = uri.getScheme();
+        if (!"https".equals(scheme) && !"http".equals(scheme)) return false;
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    new CustomTabsIntent.Builder().build()
+                        .launchUrl(DQ9RecompiledActivity.this, uri);
+                } catch (Throwable t) {
+                    Log.w("DQ9Recompiled", "Custom Tab failed, using the browser", t);
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                    } catch (Throwable t2) {
+                        Log.w("DQ9Recompiled", "no browser to open the URL", t2);
+                    }
+                }
+            }
+        });
+        return true;
     }
 
     @Override
