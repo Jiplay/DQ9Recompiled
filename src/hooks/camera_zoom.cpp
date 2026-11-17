@@ -47,7 +47,7 @@ constexpr NdsTitleSetting kCameraMode = {
     "mouse wheel or the right stick.",  // at most three lines in the pages
     0, 1, 1,
     kModeChoices, sizeof(kModeChoices) / sizeof(kModeChoices[0]), kModeValues,
-    kManual,
+    kAuto,
 };
 
 // Only used in Manual mode, but always kept (and saved).

@@ -69,6 +69,8 @@ inline bool Hidden(const NdsTitleMenuRow& row) {
     // own host list, and the lobby is named after the host.
     // By key, not section: the pages move the Netplay rows into General.
     if (row.section == "System") return true;
+    // The game has its own volume settings.
+    if (row.key == "audio.volume") return true;
     if (row.key.rfind("netplay.", 0) == 0)
         return IsNetplayToggle(row) ? false
                                     : !IsNetplayAccount(row) || !row.enabled;
@@ -100,7 +102,6 @@ inline constexpr Placement kLayout[] = {
     {"title.language", "General"},
     {"title.skip_intros", "General"},
     {"title.unlimited_quests", "General"},
-    {"audio.volume", "General"},
     {"audio.mute", "General"},
     {"netplay.enabled", "General"},
     {"netplay.account", "General"},  // only while a sign-in is wanted
@@ -173,8 +174,7 @@ inline std::string ValueText(const Model& model, const NdsTitleMenuRow& row) {
         }
         return std::to_string(value);
     default: {
-        const bool percent = row.key == "audio.volume" ||
-                             row.key == "display.second_screen_size";
+        const bool percent = row.key == "display.second_screen_size";
         return std::to_string(value) + (percent ? "%" : "");
     }
     }
