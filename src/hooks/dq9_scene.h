@@ -2,6 +2,7 @@
 // presentation hooks (UI size, camera distance).
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "title_hooks.h"
@@ -22,12 +23,26 @@ inline int LoadedOverlay(uint32_t slot) {
 // fade-out still runs from overlay 4 (slot 0) after that, so the title is
 // over only when overlay 4 is gone from its slot (see text_box_size.cpp,
 // InGame, which tests the same two things).
+//
+// The camp menu's Attributes page loads overlay 4 in slot 0 too, from the
+// field (mode 0), so overlay 4 only counts as the title's when it was
+// already there in the title's mode: remembered here until it leaves its
+// slot.
 inline bool TitleScreen() {
     constexpr uint32_t kMainMode = 0x020F33D8 + 4;
     constexpr uint8_t kTitleMode = 6;
     constexpr int kTitleOverlay = 4;
-    return bus_read_u8(kMainMode) == kTitleMode ||
-           LoadedOverlay(0) == kTitleOverlay;
+    static std::atomic<bool> title_overlay{false};
+    const bool overlay = LoadedOverlay(0) == kTitleOverlay;
+    if (bus_read_u8(kMainMode) == kTitleMode) {
+        title_overlay.store(overlay, std::memory_order_relaxed);
+        return true;
+    }
+    if (!overlay) {
+        title_overlay.store(false, std::memory_order_relaxed);
+        return false;
+    }
+    return title_overlay.load(std::memory_order_relaxed);
 }
 
 // Samples the scene for the forced screen layouts (screen_layouts.cpp), at a
@@ -67,7 +82,7 @@ inline bool RecordsPage() {
            bus_read_u16(kBldcntA) == kPageBlend;
 }
 
-// Character pages: the equipment screen (camp menu > Equipment, overlay 5
+// Character pages: the Attributes page (below), the equipment screen (camp menu > Equipment, overlay 5
 // in slot 0) and character creation (overlay 9 in slot 1). They fill
 // engine A with 2D layers and frame the character's 3D model beside them.
 // Engine A's BG1CNT is 0x1D03 on both (screen base 29, priority 3; BG2/BG3
@@ -75,14 +90,23 @@ inline bool RecordsPage() {
 // field has 0x0004, and the camp menu (overlay 2 in slot 0) 0x1D02, which
 // must not match: its windows are scaled. The overlays stay loaded after
 // the page closes, so BG1 is what tells the page apart.
+//
+// The Attributes page (camp menu > Attributes) loads overlay 4 in slot 0,
+// the title's overlay, with BG1CNT 0x1D00 (BG2 0x1E09/0x1E0A, BG3 0x1F0B);
+// the title screen has 0x0004 / 0x0104 / 0x0105 there.
 inline bool CharacterPage() {
     constexpr uint32_t kFieldSlot = 0;
     constexpr uint32_t kMenuSlot = 1;
+    constexpr int kAttributesOverlay = 4;
     constexpr int kEquipmentOverlay = 5;
     constexpr int kCreationOverlay = 9;
     constexpr uint32_t kBg1cntA = 0x0400000A;
     constexpr uint16_t kPageBg1 = 0x1D03;
-    if (bus_read_u16(kBg1cntA) != kPageBg1) return false;
+    constexpr uint16_t kAttributesBg1 = 0x1D00;
+    const uint16_t bg1 = bus_read_u16(kBg1cntA);
+    if (bg1 == kAttributesBg1)
+        return LoadedOverlay(kFieldSlot) == kAttributesOverlay;
+    if (bg1 != kPageBg1) return false;
     return LoadedOverlay(kFieldSlot) == kEquipmentOverlay ||
            LoadedOverlay(kMenuSlot) == kCreationOverlay;
 }

@@ -78,11 +78,11 @@ constexpr int kAutoMaxPermille = 4000;
 // Headless (no window) Auto stays at 1000.
 //
 // Full-screen pages (dq9::FullScreenPage: the battle records, the Defeated
-// Monster List, the equipment screen, character creation) stay at 1000
-// too. They are shown stretched as on the DS, and their camera frames one
-// model (Stella, the monster, the character) beside the 2D layout: moving
-// it back shrinks the model toward the screen centre, away from the place
-// the page keeps for it.
+// Monster List, Attributes, the equipment screen, character creation) stay
+// at 1000 too. They are shown stretched as on the DS, and their camera
+// frames one model (Stella, the monster, the character) beside the 2D
+// layout: moving it back shrinks the model toward the screen centre, away
+// from the place the page keeps for it.
 // In battle the distance is capped at 200%.
 constexpr int kBattleMaxPermille = 2000;
 
