@@ -84,7 +84,7 @@ using dq9::LoadedOverlay;
 // Continue sets mode 0 at once, but the title's fade-out still runs from
 // overlay 4 after that, so the game also needs overlay 4 gone from its slot.
 // Overlays 0..6 share slot 0 (see LoadedOverlay), and the field loads
-// another one there (battle: overlay 0).
+// another one there (the overworld: overlay 0, towns: overlay 3).
 constexpr uint32_t kMainMode = 0x020F33D8 + 4;
 constexpr uint32_t kTitleSlot = 0;
 constexpr int kTitleOverlay = 4;

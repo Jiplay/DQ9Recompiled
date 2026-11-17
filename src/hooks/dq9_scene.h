@@ -49,9 +49,16 @@ inline bool TitleScreen() {
 // consistent point on the CPU thread: G3_SwapBuffers, from Dq9WindowLayers.
 void SampleScreenLayout();
 
-// In battle: the field loads overlay 0 in slot 0 for it (see
-// text_box_size.cpp, InGame).
-inline bool InBattle() { return LoadedOverlay(0) == 0; }
+// In battle: the battle routes engine A (the 3D) to the top LCD, POWCNT1
+// bit 15 set, for as long as it runs, from the transition in to the fade
+// back; the field, towns and the camp menu keep it on the bottom LCD.
+// Slot 0 does not tell: it holds the area's overlay (0 in the overworld,
+// 3 in towns), and the battle loads its own in slot 3.
+inline bool InBattle() {
+    constexpr uint32_t kPowcnt1 = 0x04000304;
+    constexpr uint16_t kEngineAOnTop = 0x8000;
+    return (bus_read_u16(kPowcnt1) & kEngineAOnTop) != 0;
+}
 
 // The battle records pages (see FullScreenPage), with the Alchenomicon
 // and the accolade popup (below). The battle records (camp
