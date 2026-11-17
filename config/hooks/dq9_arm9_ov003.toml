@@ -102,3 +102,15 @@ mode = "arm"
 name = "Dq9QuestSlotBase"
 registers = ["r2"]
 when = "after"
+
+# Back to the title from the church's "turn the power OFF" screen. After
+# the last message box of a priest's "I'll stop here", 0x0215B1DC(scene)
+# fades to black, shows text 110 and then stays in step 3 (scene+0x580)
+# for good. The entry hook notes the screen; the pad update hook
+# (Dq9MessageTopClick, dq9_arm9.toml) then turns a new press or tap into a
+# console reset. Handler: src/hooks/quit_to_title.cpp.
+[[hook]]
+address = 0x0215B1DC      # push {r3-r7, lr} (r0 = scene)
+mode = "arm"
+name = "Dq9PowerOffScreen"
+registers = ["r0"]

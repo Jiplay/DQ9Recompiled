@@ -823,10 +823,15 @@ void NoteTopClick() {
 }
 }  // namespace
 
+// The church's power-OFF screen: a press there resets to the title
+// (quit_to_title.cpp).
+void Dq9PowerOffScreenInput(uint32_t keys);
+
 // Before `strh r0, [r5]` at 0x0201232C (the pad update): r0 = keys held this
 // frame. A fresh click on the top screen while a message box is up adds A for
 // this one frame (the next frame's update drops it again).
 NDS_TITLE_HOOK void Dq9MessageTopClick(uint32_t* held) {
+    Dq9PowerOffScreenInput(*held);
     NoteTopClick();
     const uint32_t owner = bus_read_u32(kMessageOwner);
     const uint32_t messages = owner != 0 ? bus_read_u32(owner + 28u) : 0u;
