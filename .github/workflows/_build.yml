@@ -31,7 +31,7 @@ env:
   ROM_PATH: dq9.nds
   ROM_SHA1: ff761d349709f329c8ac4bd0023fdce21861e8a1
   ROM_CACHE_KEY: dq9-rom-v1
-  SDL3_VERSION: "3.2.10"
+  SDL3_VERSION: "3.4.14"
   # The android-arm64 leg only runs its steps when vars.ANDROID_BUILD is
   # 'true', so it can be switched off without editing the workflow.
   ANDROID_BUILD: ${{ vars.ANDROID_BUILD == 'true' }}
