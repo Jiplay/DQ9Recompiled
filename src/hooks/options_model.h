@@ -89,6 +89,7 @@ inline bool Hidden(const NdsTitleMenuRow& row) {
 //   General   set once: language first, intros, sound, Netplay
 //   Display   what the picture looks like, the frame rate first
 //   Controls  menus, camera and gamepad
+//   Multipliers  battle damage, EXP and gold
 // Only the category changes: the keys, and so settings.toml, stay as they
 // are. A row not named here (System, or one added later) comes after these
 // in the runtime menu's order, in the page PageSection picks; Hidden() runs
@@ -118,6 +119,10 @@ inline constexpr Placement kLayout[] = {
     {"title.camera_mode", "Controls"},
     {"title.unlock_camera_rotation", "Controls"},
     {"input.gamepad_layout", "Controls"},  // hidden with custom bindings
+    {"title.mult_damage_dealt", "Multipliers"},
+    {"title.mult_damage_taken", "Multipliers"},
+    {"title.mult_exp", "Multipliers"},
+    {"title.mult_gold", "Multipliers"},
 };
 
 // The page for a row kLayout does not name.

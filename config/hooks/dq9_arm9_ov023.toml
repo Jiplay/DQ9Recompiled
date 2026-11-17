@@ -91,3 +91,21 @@ mode = "arm"
 name = "Dq9QuestSlotBase"
 registers = ["r7"]
 when = "after"
+
+# Battle multipliers (handler src/hooks/battle_multipliers.cpp). Battle end
+# 0x021EDF54: every machine reaches 0x021EE4F4 once ctrl+22360 holds the EXP
+# per party slot (the leader computed it, the others got it with message
+# 106), before the results snapshot and 0x021F5150 read it.
+[[hook]]
+address = 0x021EE4F4      # ldr r1, [r7, #0x29C] (r7 = battle ctrl)
+mode = "arm"
+name = "Dq9BattleExpScale"
+registers = ["r7"]
+
+# 0x021F5150 (apply EXP and gold): r0 = 0x021F44D0's gold share, stored as
+# the shown amount and added to the party's gold.
+[[hook]]
+address = 0x021F51EC      # str r0, [r7]
+mode = "arm"
+name = "Dq9BattleGoldScale"
+registers = ["r0"]

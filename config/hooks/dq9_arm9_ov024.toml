@@ -13,3 +13,13 @@ mode = "arm"
 name = "Dq9QuestSlotBase"
 registers = ["r0"]
 when = "after"
+
+# Battle multipliers (handler src/hooks/battle_multipliers.cpp): the action
+# executor 0x021EB5D0 stores the final damage of one hit (0x021E6A90) at
+# sp+0x54, which it hands to the action-type handler that applies and shows
+# it; sp+0xD2 / sp+0xD0 = attacker / target actor ids (s16).
+[[hook]]
+address = 0x021EC7AC      # str r0, [sp, #0x54]
+mode = "arm"
+name = "Dq9BattleDamageScale"
+registers = ["r0", "sp"]
