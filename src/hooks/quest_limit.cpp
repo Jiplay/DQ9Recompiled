@@ -43,6 +43,7 @@ constexpr uint32_t kSeenBits = kMgr + 0x4A8u;   // cleared by remove
 constexpr uint32_t kQuestStates = 0x02108844u + 716u;  // 4 bits per quest
 constexpr uint32_t kGameMax = 8u;
 constexpr uint32_t kQuests = 204u;
+constexpr uint32_t kSharedQuests = 0xAEu;      // 174..203 sync in multiplayer
 constexpr uint32_t kSlotSize = 16u;
 constexpr uint32_t kBlockSize = 0xA0u;          // what the save keeps of mgr
 
@@ -292,8 +293,12 @@ NDS_TITLE_HOOK void Dq9QuestLoad() {
         }
     }
     if (count != kGameMax) return;
+    // Quests from 174 on are left alone: in multiplayer the game shares
+    // their state between players (message 0x9B kind 7, 0x021D097C ->
+    // 0x0206E758 -> 0x0206E568) but not their slots, so the game itself
+    // can have one accepted with no slot.
     const std::vector<Slot> slots = ReadSlots(kGameSlots, count);
-    for (uint32_t id = 0; id < kQuests; ++id) {
+    for (uint32_t id = 0; id < kSharedQuests; ++id) {
         if (QuestState(id) != 2u) continue;
         const bool has = std::any_of(slots.begin(), slots.end(),
                                      [&](const Slot& s) { return s.Id() == id; });
