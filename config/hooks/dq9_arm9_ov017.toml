@@ -36,8 +36,8 @@ registers = ["r5", "r4"]
 [[hook]]
 address = 0x021AED10      # bl 0x020473D8 (r0 = sprite)
 mode = "arm"
-name = "Dq9HarvestIconBegin"
-registers = ["r0", "r4"]
+name = "Dq9WorldIconBegin"
+registers = ["r0"]
 
 [[hook]]
 address = 0x021AED14      # after the draw
@@ -45,10 +45,10 @@ mode = "arm"
 name = "Dq9WorldIconEnd"
 
 [[hook]]
-address = 0x021AEDD4      # bl 0x020473D8 (r0 = sprite; fade-out state)
+address = 0x021AEDD4      # bl 0x020473D8 (r0 = sprite; harvest sprite, last frames)
 mode = "arm"
-name = "Dq9HarvestIconBegin"
-registers = ["r0", "r4"]
+name = "Dq9WorldIconBegin"
+registers = ["r0"]
 
 [[hook]]
 address = 0x021AEDD8      # after the draw
