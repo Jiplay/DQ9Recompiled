@@ -16,6 +16,9 @@ ROM_SHA1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 PROJECT_NAME = "DQ9Recompiled"
 BANK_BUILD_DIR = "build"
 RUNNER_BUILD_DIR = "build-runner"
+# The ROM the banks are built from, unpacked; dq9.nds is unpacked into it.
+ROM_FILE = "dq9.nds"
+ROM_DIR = os.path.join("assets", "eu")
 RECOMP_NET_DIR = "recomp-net"
 
 # The self-updater checks UPDATE_REPO's latest GitHub release for an asset
@@ -178,11 +181,24 @@ def compiler_args(compilers):
     return [f"-DCMAKE_C_COMPILER={cc}", f"-DCMAKE_CXX_COMPILER={cxx}"]
 
 
+def ensure_rom_folder(python):
+    """The build reads the ROM unpacked (ndsrecomp/tools/nds_folder.py), from
+    ROM_DIR, which is made from dq9.nds the first time."""
+    if os.path.exists(os.path.join(ROM_DIR, "rom.toml")):
+        return
+    if not os.path.exists(ROM_FILE):
+        die(f"neither {ROM_DIR}/ nor {ROM_FILE} found in the repo root: place "
+            f"your Europe (YDQP) ROM there as {ROM_FILE}")
+    run([python, "-I", os.path.join("ndsrecomp", "tools", "nds_folder.py"),
+         "unpack", ROM_FILE, ROM_DIR])
+
+
 def build_banks(args, compilers, python):
     configure = [
         "cmake", "-G", "Ninja", "-S", ".", "-B", BANK_BUILD_DIR,
         f"-DCMAKE_BUILD_TYPE={args.build_type}",
         f"-DDQ9_PYTHON={cmake_path(python)}",
+        f"-DDQ9_ROM={cmake_path(os.path.abspath(ROM_DIR))}",
         f"-DNDSRECOMP_COMPILE_JOBS={args.jobs}",
         f"-DDQ9_HOOKS={'OFF' if args.no_hooks else 'ON'}",
         f"-DDQ9_FIRMWARE_BANKS={'ON' if args.firmware_banks else 'OFF'}",
@@ -252,8 +268,8 @@ def build_runner(args, compilers):
         die("no SDL3 found: pass --sdl3-dir <dir with SDL3Config.cmake> or set SDL3_DIR")
 
     # The cartridge banner icon becomes the Windows .exe icon.
-    rom = os.path.abspath("dq9.nds")
-    if os.path.exists(rom):
+    rom = os.path.abspath(ROM_DIR)
+    if os.path.exists(os.path.join(rom, "rom.toml")):
         configure.append(f"-DNDS_EXE_ICON_ROM={cmake_path(rom)}")
 
     # Netplay is on unless --no-online; recomp-net comes from its submodule
@@ -398,9 +414,8 @@ def main():
     compilers = find_clang()
 
     if not args.runner_only:
-        if not os.path.exists("dq9.nds"):
-            die("dq9.nds not found in the repo root: place your Europe (YDQP) ROM there")
         python = ensure_venv()
+        ensure_rom_folder(python)
         build_banks(args, compilers, python)
         ensure_freebios_banks()
         if args.banks_only:

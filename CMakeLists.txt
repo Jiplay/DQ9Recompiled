@@ -14,8 +14,16 @@ include("${NDSRECOMP_ROOT}/cmake/NdsJobPools.cmake")
 add_subdirectory("${NDSRECOMP_ROOT}/recompiler"
                  "${CMAKE_BINARY_DIR}/ndsrecomp-recompiler")
 
-set(DQ9_ROM "${CMAKE_CURRENT_SOURCE_DIR}/dq9.nds" CACHE FILEPATH
-    "Path to the verified Europe YDQP ROM")
+set(DQ9_ROM "${CMAKE_CURRENT_SOURCE_DIR}/assets/eu" CACHE PATH
+    "The verified Europe YDQP ROM: a .nds, or a folder unpacked from one")
+# An unpacked folder changes through its files; rom.toml lists them all.
+if(IS_DIRECTORY "${DQ9_ROM}")
+    file(GLOB_RECURSE DQ9_ROM_DEPENDS CONFIGURE_DEPENDS
+        "${DQ9_ROM}/rom.toml" "${DQ9_ROM}/*.bin")
+    list(FILTER DQ9_ROM_DEPENDS EXCLUDE REGEX "/data/")
+else()
+    set(DQ9_ROM_DEPENDS "${DQ9_ROM}")
+endif()
 set(DQ9_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/generated")
 set(DQ9_INPUT_DIR "${DQ9_GENERATED_DIR}/inputs")
 set(DQ9_RECOMP_DIR "${DQ9_GENERATED_DIR}/recomp")
@@ -40,7 +48,8 @@ add_custom_command(
     OUTPUT ${DQ9_PREP_OUTPUTS}
     COMMAND "${DQ9_PYTHON}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_dq9.py"
             --rom "${DQ9_ROM}" --out "${DQ9_INPUT_DIR}"
-    DEPENDS "${DQ9_ROM}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_dq9.py"
+    DEPENDS ${DQ9_ROM_DEPENDS} "${CMAKE_CURRENT_SOURCE_DIR}/tools/prepare_dq9.py"
+            "${NDSRECOMP_ROOT}/tools/nds_folder.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/ov029_unprotect.py"
     COMMENT "Verifying YDQP and preparing main/overlay code images")
 add_custom_target(dq9_prepare DEPENDS ${DQ9_PREP_OUTPUTS})

@@ -32,7 +32,11 @@ on a recompiled FreeBIOS and a generated firmware.
 ./DQ9Recompiled
 ```
 
-Settings and saves live in a per-user folder, or
+On first launch it asks for your ROM and unpacks it into `assets/eu` in the
+data folder (the `.nds` can then be moved or deleted); the game packs them
+back into a cartridge every time it starts.
+
+Settings, saves and the unpacked ROM live in a per-user folder, or
 next to the executable if a `portable.txt` file is there:
 
 | Platform | Folder |
@@ -75,6 +79,11 @@ Put your ROM in the repository root as `dq9.nds`, then:
 ```bash
 python3 scripts/build.py
 ```
+
+The first build unpacks `dq9.nds` into `assets/eu/` and builds from that
+folder from then on (`dq9.nds` is no longer needed). A runner started from
+the repository finds `assets/eu/` on its own.
+`ndsrecomp/tools/nds_folder.py unpack|pack` converts between the two by hand.
 
 `python3 scripts/build.py --package` then packs the build as the release asset
 the updater looks for (`DQ9Recompiled-<tag>-<platform>.zip`, `.tar.gz` on Linux,

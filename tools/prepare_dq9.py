@@ -22,6 +22,9 @@ except ImportError as exc:
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ov029_unprotect  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ndsrecomp" / "tools"))
+import nds_folder  # noqa: E402
+
 
 EXPECTED_ROM_SHA1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 EXPECTED_ROM_SIZE = 256 * 1024 * 1024
@@ -35,6 +38,18 @@ def sha1(data: bytes) -> str:
 
 def toml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=True)
+
+
+def write_if_changed(path: Path, data: bytes) -> None:
+    """Leaves an identical file alone, so its timestamp does not make the
+    build regenerate and recompile the banks made from it."""
+    if path.is_file() and path.read_bytes() == data:
+        return
+    path.write_bytes(data)
+
+
+def write_text(path: Path, text: str) -> None:
+    write_if_changed(path, text.encode("utf-8"))
 
 
 def write_seed_config(
@@ -66,11 +81,7 @@ def write_seed_config(
                 'kind = "rom_header"',
                 "",
             ]
-    path.write_text(
-        "\n".join(lines),
-        encoding="utf-8",
-        newline="\n",
-    )
+    write_text(path, "\n".join(lines))
 
 
 def write_overlay_config(
@@ -125,7 +136,7 @@ def write_overlay_config(
         lines += ["[[entry_point]]", f"addr = 0x{addr:08x}", 'mode = "arm"',
                   f"name = {toml_string(f'ov{overlay_id:03d}_{addr:08x}')}",
                   'kind = "protected_code"', ""]
-    path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
+    write_text(path, "\n".join(lines))
 
 
 # Overlays that load at or above this address target DSi-exclusive memory and
@@ -161,7 +172,8 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
-    rom_bytes = args.rom.read_bytes()
+    # A .nds, or a folder unpacked from one, packed back here.
+    rom_bytes = nds_folder.read_rom(args.rom)
     digest = sha1(rom_bytes)
     if len(rom_bytes) != EXPECTED_ROM_SIZE:
         raise SystemExit(f"ROM size mismatch: {len(rom_bytes)} != {EXPECTED_ROM_SIZE}")
@@ -183,8 +195,8 @@ def main() -> int:
     out = args.out.resolve()
     overlays_dir = out / "overlays"
     overlays_dir.mkdir(parents=True, exist_ok=True)
-    (out / "arm9.bin").write_bytes(arm9)
-    (out / "arm7.bin").write_bytes(arm7)
+    write_if_changed(out / "arm9.bin", arm9)
+    write_if_changed(out / "arm7.bin", arm7)
     write_seed_config(out / "arm9.toml", name="Dragon Quest IX (Europe) ARM9 main",
         program_id="dq9_ydqp_arm9", load_address=int(rom.arm9RamAddress),
         entry_pc=int(rom.arm9EntryAddress), binary=arm9)
@@ -207,7 +219,7 @@ def main() -> int:
             entries, ranges = ov029_unprotect.bank_inputs(report)
             print(f"overlay {oid}: decrypted {len(report['stubs'])} protected "
                   f"functions and {len(report['stage1_regions'])} stage 1 regions")
-        (overlays_dir / fn).write_bytes(data)
+        write_if_changed(overlays_dir / fn, data)
         if int(ov.ramAddress) < DS_MAIN_RAM_LIMIT:
             write_overlay_config(overlays_dir / f"arm9_overlay_{oid:03d}.toml",
                 title="Dragon Quest IX (Europe)", program_id="dq9_ydqp_arm9",
@@ -219,8 +231,7 @@ def main() -> int:
             "load_address": f"0x{int(ov.ramAddress):08x}", "size": int(ov.ramSize),
             "bss_size": int(ov.bssSize), "compressed_in_rom": bool(ov.compressed),
             "sha1": sha1(data)})
-    (out / "overlays.json").write_text(json.dumps(manifest, indent=2) + "\n",
-        encoding="utf-8", newline="\n")
+    write_text(out / "overlays.json", json.dumps(manifest, indent=2) + "\n")
     print(f"ROM verified: YDQP revision 0, SHA-1 {digest}")
     print(f"ARM9: {len(arm9_compressed):,} -> {len(arm9):,} bytes at 0x{int(rom.arm9RamAddress):08X}")
     print(f"ARM7: {len(arm7):,} bytes at 0x{int(rom.arm7RamAddress):08X}")

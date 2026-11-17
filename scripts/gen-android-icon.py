@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Writes the Android launcher icon from the ROM's cartridge banner icon.
 
-usage: gen-android-icon.py [rom.nds]   (default: dq9.nds in the repo root)
+usage: gen-android-icon.py [rom.nds or unpacked folder]
+       (default: assets/eu, else dq9.nds, in the repo root)
 
 The icon is the ROM's, so it is generated, never committed: this writes
 android/app/icon-res/mipmap-xxxhdpi/ic_launcher_foreground.png, the layer
@@ -20,6 +21,7 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 sys.path.insert(0, os.path.join(ROOT, "ndsrecomp", "tools"))
 
 from gen_nds_icon import banner_icon  # noqa: E402
+from nds_folder import banner_image  # noqa: E402
 
 OUT = os.path.join(ROOT, "android", "app", "icon-res", "mipmap-xxxhdpi",
                    "ic_launcher_foreground.png")
@@ -45,9 +47,13 @@ def encode_png(rows):
 
 
 def main():
-    rom_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "dq9.nds")
-    with open(rom_path, "rb") as f:
-        px = banner_icon(f.read())
+    if len(sys.argv) > 1:
+        rom_path = sys.argv[1]
+    else:
+        rom_path = os.path.join(ROOT, "assets", "eu")
+        if not os.path.isdir(rom_path):
+            rom_path = os.path.join(ROOT, "dq9.nds")
+    px = banner_icon(banner_image(rom_path))
 
     def source(i):
         j = (i - MARGIN) // SCALE
