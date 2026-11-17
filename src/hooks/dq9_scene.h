@@ -137,8 +137,32 @@ inline bool CharacterPage() {
            LoadedOverlay(kMenuSlot) == kCreationOverlay;
 }
 
+// The Quester's Rest pages, opened by talking to the inn, not from the camp
+// menu:
+//   * The Krak Pot loads overlay 6 in slot 0, as the Alchenomicon does
+//     (RecordsPage), and sets the same BG1CNT 0x1D00 (BG2 0x1E01, BG3
+//     0x1F0B), but with the field's overlay 11 in slot 1.
+//   * "Canvass for guests" turns the wireless on (overlay 31 in slot 4 for
+//     part of it) and sets BG1CNT 0x0F01 (BG0 0x0000, BG2 0x0E0A, BG3
+//     0x0003) for as long as it is up. The field has 0x0004 there, its 2D
+//     message box 0x0D09 and the camp menu 0x1D02.
+inline bool InnPage() {
+    constexpr uint32_t kFieldSlot = 0;
+    constexpr int kKrakPotOverlay = 6;
+    constexpr uint32_t kBg0cntA = 0x04000008;
+    constexpr uint32_t kBg1cntA = 0x0400000A;
+    constexpr uint16_t kKrakPotBg1 = 0x1D00;
+    constexpr uint16_t kCanvassBg1 = 0x0F01;
+    const uint16_t bg1 = bus_read_u16(kBg1cntA);
+    if (bg1 == kKrakPotBg1)
+        return LoadedOverlay(kFieldSlot) == kKrakPotOverlay;
+    return bg1 == kCanvassBg1 && bus_read_u16(kBg0cntA) == 0;
+}
+
 // Full-screen pages, left as on the DS by the UI size and the camera
-// distance: the battle records pages and the character pages.
-inline bool FullScreenPage() { return RecordsPage() || CharacterPage(); }
+// distance: the battle records pages, the character pages and the inn's.
+inline bool FullScreenPage() {
+    return RecordsPage() || CharacterPage() || InnPage();
+}
 
 }  // namespace dq9
