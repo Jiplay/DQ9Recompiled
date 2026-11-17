@@ -1,5 +1,4 @@
 [game]
-name = "Dragon Quest IX"
 # Data directory name: settings, saves and savestates live there.
 app_name = "DQ9Recompiled"
 id = "YDQP"

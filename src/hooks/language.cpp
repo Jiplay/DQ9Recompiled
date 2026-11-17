@@ -72,6 +72,9 @@ NDS_TITLE_HOOK void Dq9Language(uint32_t* r2) {
 // loaded, call their loader (true: jump to 0x020E5124 with lr = this
 // instruction). It returns here, and the hook then finds nothing to do.
 NDS_TITLE_HOOK bool Dq9LanguageReload(uint32_t* lr) {
+    // The window title shows the game's name in this language (the ROM banner
+    // has one per language); host state only.
+    nds_title_set_language(static_cast<int>(WantedLanguage()));
     const uint32_t current = bus_read_u8(kGameLanguage);
     if (current < 1 || current > 5) return false;  // not initialised yet
     const uint32_t wanted = WantedLanguage();
