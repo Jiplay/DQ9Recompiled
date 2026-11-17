@@ -84,14 +84,17 @@ int16_t S16(uint32_t value) { return static_cast<int16_t>(value & 0xFFFFu); }
 uint32_t Language() { return bus_read_u8(dq9::kGameTextLanguage); }
 
 // The window text is markup: outside a <tag>, a comma and an apostrophe
-// are written as the game's own text writes them.
-std::string Markup(const std::string& text) {
+// are written as the game's own text writes them. The description window
+// reads "% s" as a format, so its % is doubled (`escape_percent`); the
+// title and rows print a % as is.
+std::string Markup(const std::string& text, bool escape_percent = false) {
     std::string out;
     bool tag = false;
     for (const char c : text) {
         if (c == '<') tag = true;
         if (!tag && c == ',') out += "<,>";
         else if (!tag && c == '\'') out += "<1>";
+        else if (!tag && escape_percent && c == '%') out += "%%";
         else out += c;
         if (c == '>') tag = false;
     }
@@ -201,7 +204,7 @@ NDS_TITLE_HOOK void Dq9CampOptionsDescription(uint32_t* r0, uint32_t* r5) {
     } else {
         return;
     }
-    WriteString(kDescText, kDescTextSize, Markup(text));
+    WriteString(kDescText, kDescTextSize, Markup(text, true));
     *r0 = kDescText;
 }
 
