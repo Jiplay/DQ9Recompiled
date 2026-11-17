@@ -6,8 +6,14 @@
 // Alone or hosting, the values are this machine's settings. Visiting another
 // player's world they are the host's, and the Options pages show the rows
 // locked (options_model.h Locked()): in multiplayer every machine simulates
-// the battle itself (lockstep), so all must use the same values. The host's
-// values do not reach the guests yet, so a guest plays at 1x for now.
+// the battle itself (lockstep), so all must use the same values. The host
+// sends them to its guests with the runner's title message (wifi_net.h
+// nds_netplay_title_message): "DQ9M", version 1, then the five values as
+// u16 (dealt, taken, EXP, gold, drops). A guest without one (none received,
+// an older build, another version) plays at 1x, never at its own values.
+// In multiplayer the values are taken once per battle, at the battle's
+// init (ov000 0x0215CE80), so a message arriving mid-battle cannot make two
+// machines' simulations differ.
 //
 // Hooks (config/hooks/dq9_arm9_ov023.toml, dq9_arm9_ov024.toml):
 // - EXP: ov023 0x021EE4F4, where every machine goes once the battle's EXP
@@ -29,11 +35,14 @@
 //   0x021F47E0. A sure drop (1/1, 100%) stays sure below 1x.
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <string>
+#include <vector>
 
 #include "battle_multipliers.h"
 #include "title_hooks.h"
 #include "title_settings.h"
+#include "wifi_net.h"
 
 namespace {
 
@@ -95,17 +104,75 @@ bool IsParty(int16_t id) { return id >= 0 && id < kPartySlots; }
 constexpr uint32_t kComm = 0x020FEFECu;
 constexpr uint32_t kPlayerIndex = 0x021015A0u;  // u16
 
-// The multiplier `id` applies now: this machine's setting, or the host's
-// while visiting.
-int Multiplier(int id) {
-    if (!dq9::VisitingAnotherWorld()) return nds_title_setting_value(id);
-    const NdsTitleSetting* setting = id == kDamageDealtId ? &kDamageDealt
-                                   : id == kDamageTakenId ? &kDamageTaken
-                                   : id == kExpId         ? &kExp
-                                   : id == kGoldId        ? &kGold
-                                                          : &kDrops;
-    return dq9::HostMultiplier(std::string("title.") + setting->key);
+constexpr int kRows = 5;
+const NdsTitleSetting* const kSettings[kRows] = {
+    &kDamageDealt, &kDamageTaken, &kExp, &kGold, &kDrops};
+const int* const kIds[kRows] = {&kDamageDealtId, &kDamageTakenId, &kExpId,
+                                &kGoldId, &kDropsId};
+
+// The host's message: magic, version, then one u16 per row, kSettings order.
+constexpr uint8_t kMagic[4] = {'D', 'Q', '9', 'M'};
+constexpr uint8_t kVersion = 1;
+constexpr size_t kMessageBytes = 5 + 2 * kRows;
+
+int Row(int id) {
+    for (int row = 0; row < kRows; ++row)
+        if (*kIds[row] == id) return row;
+    return 0;
 }
+
+bool MultiplayerOn() { return bus_read_u32(kComm) != 0; }
+
+// The values the host sent, or false (all 1x) without a valid message.
+bool HostValues(int out[kRows]) {
+    std::vector<uint8_t> m;
+    if (!nds_netplay_title_message(&m) || m.size() < kMessageBytes ||
+        std::memcmp(m.data(), kMagic, 4) != 0 || m[4] != kVersion)
+        return false;
+    for (int row = 0; row < kRows; ++row) {
+        const int v = m[5 + 2 * row] | (m[6 + 2 * row] << 8);
+        out[row] = v >= 25 && v <= 500 ? v : 100;
+    }
+    return true;
+}
+
+// The value of `row` that applies now, before any battle snapshot.
+int LiveValue(int row) {
+    if (!dq9::VisitingAnotherWorld())
+        return nds_title_setting_value(*kIds[row]);
+    int host[kRows];
+    return HostValues(host) ? host[row] : 100;
+}
+
+// Taken at each battle's init while multiplayer is on; used by the battle
+// hooks for the rest of that battle.
+int g_snapshot[kRows];
+bool g_snapshot_valid = false;
+
+// The multiplier `id` applies in this battle.
+int Multiplier(int id) {
+    const int row = Row(id);
+    if (g_snapshot_valid && MultiplayerOn()) return g_snapshot[row];
+    return LiveValue(row);
+}
+
+// What this machine tells its guests: its own values, while hosting.
+size_t HostMessage(uint8_t* out, size_t capacity) {
+    if (capacity < kMessageBytes || !MultiplayerOn() ||
+        dq9::VisitingAnotherWorld())
+        return 0;
+    std::memcpy(out, kMagic, 4);
+    out[4] = kVersion;
+    for (int row = 0; row < kRows; ++row) {
+        const int v = nds_title_setting_value(*kIds[row]);
+        out[5 + 2 * row] = static_cast<uint8_t>(v);
+        out[6 + 2 * row] = static_cast<uint8_t>(v >> 8);
+    }
+    return kMessageBytes;
+}
+
+const bool kSourceRegistered =
+    (nds_netplay_set_title_message_source(&HostMessage), true);
 
 }  // namespace
 
@@ -125,8 +192,26 @@ bool dq9::VisitingAnotherWorld() {
     return visiting;
 }
 
-// Not received from the host yet: 1x for every row.
-int dq9::HostMultiplier(const std::string&) { return 100; }
+int dq9::HostMultiplier(const std::string& key) {
+    int host[kRows];
+    if (!HostValues(host)) return 100;
+    for (int row = 0; row < kRows; ++row)
+        if (key == std::string("title.") + kSettings[row]->key)
+            return host[row];
+    return 100;
+}
+
+// Before `mov r5, r0` at 0x0215CE84, the battle init (r0 = battle).
+NDS_TITLE_HOOK void Dq9BattleMultiplierSnapshot(uint32_t*) {
+    g_snapshot_valid = MultiplayerOn();
+    if (!g_snapshot_valid) return;
+    for (int row = 0; row < kRows; ++row) g_snapshot[row] = LiveValue(row);
+    std::fprintf(stderr,
+                 "[dq9-mult] battle start: dealt %d taken %d exp %d gold %d "
+                 "drops %d\n",
+                 g_snapshot[0], g_snapshot[1], g_snapshot[2], g_snapshot[3],
+                 g_snapshot[4]);
+}
 
 // Before `ldr r1, [r7, #0x29C]` at 0x021EE4F4 (r7 = battle ctrl).
 NDS_TITLE_HOOK void Dq9BattleExpScale(uint32_t* ctrl) {

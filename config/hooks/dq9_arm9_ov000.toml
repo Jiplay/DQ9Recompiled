@@ -1,0 +1,14 @@
+# Battle multipliers (handler src/hooks/battle_multipliers.cpp): 0x0215CE80
+# initialises the battle struct (r0) once per battle; in multiplayer the
+# multipliers are taken here for the whole battle.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov000"
+sha1 = "07b9f158207669e6819a6cc7e365351ddc1442e3"
+
+[[hook]]
+address = 0x0215CE84      # mov r5, r0 (r0 = battle)
+mode = "arm"
+name = "Dq9BattleMultiplierSnapshot"
+registers = ["r0"]
