@@ -158,8 +158,27 @@ android {
     }
 }
 
+/*
+ * Discord's Social SDK, for Rich Presence (the runner links the same .aar's
+ * libdiscord_partner_sdk.so, CMake NDS_DISCORD_SOCIAL_SDK_AAR). It is not in
+ * the repository: it comes from the Discord Developer Portal
+ * (DiscordSocialSdk-<version>.zip, lib/release/discord_partner_sdk.aar), and
+ * CI fetches it from the private assets release like the ROM. Point
+ * -PdiscordSdkAar=... or DISCORD_SOCIAL_SDK_AAR at it, or place it at
+ * app/libs/discord_partner_sdk.aar. Without it the APK has no Discord
+ * activity (DQ9RecompiledActivity checks for the SDK's classes).
+ */
+val discordSdkAar = rootProject.file(
+    listOf(project.findProperty("discordSdkAar") as String?,
+           System.getenv("DISCORD_SOCIAL_SDK_AAR"))
+        .firstOrNull { !it.isNullOrBlank() } ?: "app/libs/discord_partner_sdk.aar"
+)
+
 dependencies {
     // FileProvider only; the self-updater resolves it through the activity's
     // class loader (ndsrecomp/runner/src/update/self_update_android.cpp).
     implementation("androidx.core:core:1.13.1")
+    if (discordSdkAar.isFile) {
+        implementation(files(discordSdkAar))
+    }
 }

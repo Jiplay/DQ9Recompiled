@@ -37,5 +37,8 @@ __pycache__/
 /android/app/build/
 /android/app/jniLibs/
 /android/app/icon-res/
+# Discord Social SDK (Developer Portal download, not ours to commit).
+/android/app/libs/
+discord_partner_sdk.aar
 /android/local.properties
 /android/keystore/

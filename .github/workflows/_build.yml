@@ -31,6 +31,11 @@ env:
   ROM_PATH: dq9.nds
   ROM_SHA1: ff761d349709f329c8ac4bd0023fdce21861e8a1
   ROM_CACHE_KEY: dq9-rom-v1
+  # Discord's Social SDK for Android Rich Presence (discord_partner_sdk.aar,
+  # from the Developer Portal; not ours to commit): an asset of the same
+  # private release as the ROM. Without it the APK has no Discord activity.
+  DISCORD_SDK_AAR: discord_partner_sdk.aar
+  DISCORD_SDK_SHA1: afda182472218faf9f15a6a3417a9b7a3bcfa02c
   SDL3_VERSION: "3.4.14"
   # The android-arm64 leg only runs its steps when vars.ANDROID_BUILD is
   # 'true', so it can be switched off without editing the workflow.
@@ -234,6 +239,33 @@ jobs:
           NDS_VERSION_NAME: ${{ inputs.tag }}
         run: python scripts/build.py --release --jobs 4 --sdl3-dir "$SDL3_DIR"
 
+      - name: Fetch the Discord Social SDK (Android)
+        if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ASSETS_TOKEN }}
+        shell: bash
+        run: |
+          mkdir -p android/app/libs
+          for attempt in 1 2 3; do
+            if gh release download ${ASSETS_RELEASE:+"$ASSETS_RELEASE"} \
+                --repo "$ASSETS_REPO" --pattern "$DISCORD_SDK_AAR" \
+                --dir android/app/libs --clobber; then
+              break
+            fi
+            sleep $((attempt * 15))
+          done
+          aar="android/app/libs/$DISCORD_SDK_AAR"
+          if [ ! -f "$aar" ]; then
+            echo "::warning::$DISCORD_SDK_AAR not in the assets release: building without Discord Rich Presence"
+            exit 0
+          fi
+          digest="$(sha1sum "$aar" | cut -d' ' -f1)"
+          if [ "$digest" != "$DISCORD_SDK_SHA1" ]; then
+            echo "$aar has SHA-1 $digest, expected $DISCORD_SDK_SHA1"
+            exit 1
+          fi
+          echo "DISCORD_SOCIAL_SDK_AAR=$PWD/$aar" >> "$GITHUB_ENV"
+
       # Android: the banks are generated on the host, then the runner is
       # cross-compiled with the NDK as libnds_runner.so.
       - name: Generate banks (Android)
@@ -262,7 +294,8 @@ jobs:
             -DNDS_ONLINE=ON -DNDS_RECOMP_NET_ROOT="$PWD/recomp-net" \
             -DNDS_UPDATE_REPO=birabittoh/DQ9Recompiled \
             "-DNDS_UPDATE_ASSET_FORMAT=DQ9Recompiled-{tag}-{platform}" \
-            "-DNDS_TITLE_HOOK_SOURCES=$hooks"
+            "-DNDS_TITLE_HOOK_SOURCES=$hooks" \
+            "-DNDS_DISCORD_SOCIAL_SDK_AAR=${DISCORD_SOCIAL_SDK_AAR:-}"
           cmake --build build-android --parallel 4 --target nds_runner
 
       - name: sccache stats
