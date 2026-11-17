@@ -153,10 +153,15 @@ NDS_TITLE_HOOK void Dq9CampOptionsSize(uint32_t* r4, uint32_t* r6) {
     const uint32_t count = g_camp.open
         ? static_cast<uint32_t>(g_camp.rows.size()) : g_camp.misc_count;
     if (g_camp.open) bus_write_u16(*r4 + kNextWidth, kPageWidth);
-    if (count > 8u) {
-        bus_write_u16(*r4 + kNextHeight, static_cast<uint16_t>(3u + 2u * count));
+    // A page's window is sized from its own rows, so a short one (the
+    // categories) keeps the margin under its last row.
+    if (count > 8u || (g_camp.open && count > 0u)) {
+        // One more tile on a page: the margin under the last row.
+        bus_write_u16(*r4 + kNextHeight, static_cast<uint16_t>(
+            3u + 2u * count + (g_camp.open ? 1u : 0u)));
         bus_write_u16(*r4 + kNextLines, static_cast<uint16_t>(
-            bus_read_u8(*r6 + kLayoutLines) + count - 7u));
+            static_cast<int>(bus_read_u8(*r6 + kLayoutLines)) +
+            static_cast<int>(count) - 7));
     }
 }
 
