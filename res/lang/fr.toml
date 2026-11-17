@@ -5,6 +5,7 @@ options = "Options"
 import_save = "Importer une sauvegarde"
 export_save = "Exporter la sauvegarde"
 update = "Mettre <`a> jour vers {}"
+quit = "Quitter le jeu"
 
 [camp_menu]
 options_description = "Permet de modifier les param<`e>tres g<'e>n<'e>raux, d'affichage et de commandes."

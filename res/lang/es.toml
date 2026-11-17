@@ -5,6 +5,7 @@ options = "Opciones"
 import_save = "Importar partida guardada"
 export_save = "Exportar partida guardada"
 update = "Actualizar a {}"
+quit = "Salir del juego"
 
 [camp_menu]
 options_description = "Permite cambiar los ajustes generales, de pantalla y de controles."

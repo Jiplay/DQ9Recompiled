@@ -34,6 +34,10 @@
 // installer (Android) or reports a failure. And this build's version is
 // shown in the bottom-left corner, in a small window of the pages' panel
 // (212, closed while the main menu is up) opened by the builder hook too.
+//
+// Last, a "Quit game" row at the bottom, made and laid out the same way:
+// choosing it closes the game through the frontend's normal exit (as the
+// window's close button does, pending saves written first).
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -43,6 +47,7 @@
 #include <string>
 #include <vector>
 
+#include "frontend.h"
 #include "options_model.h"
 #include "save_image.h"
 #include "title_save.h"
@@ -152,7 +157,7 @@ constexpr uint32_t kTextBufferSize = 0xA0u;
 constexpr uint32_t kDescText = 0x02183CE0u;  // kDescLines strings
 constexpr uint32_t kSaveRowText = 0x02184120u;  // the save row's string
 constexpr uint32_t kSaveRowTextSize = 0x60u;
-constexpr uint32_t kMainGridArray = 0x02184180u;  // up to 4 u16
+constexpr uint32_t kMainGridArray = 0x02184180u;  // up to 6 u16
 
 constexpr uint32_t kMaxRows = 8u;
 constexpr uint32_t kFirstCell = 110u;  // ids 110..120: unused by opening.stb
@@ -192,6 +197,12 @@ constexpr uint32_t kVersionWidth = 6u, kVersionHeight = 3u;
 constexpr uint32_t kVersionVram =
     kPageVram + 32u * 24u * 32u - kVersionWidth * kVersionHeight * 32u;
 constexpr int kVersionCellX = 4, kVersionCellY = 6;  // pixels in the window
+
+// The quit row's cell, after the version line's, and its string (free
+// memory below the version line's).
+constexpr uint32_t kQuitCell = kVersionCell + 1u;
+constexpr uint32_t kQuitRowText = 0x02183BE0u;
+constexpr uint32_t kQuitRowTextSize = 0x60u;
 
 // ---- Calling guest code from the hook -----------------------------------
 
@@ -386,7 +397,8 @@ void Open(uint32_t scene) {
         const bool main_row =
             bus_read_u16(w + kWidgetType) == kTypeCell &&
             bus_read_u16(w + kCellLayer) == kMainMenuLayer &&
-            (id < kFirstCell || id == kSaveCell || id == kUpdateCell);
+            (id < kFirstCell || id == kSaveCell || id == kUpdateCell ||
+             id == kQuitCell);
         // The version line is drawn in the page's own panel.
         const bool version = id == kVersionCell &&
             bus_read_u16(w + kWidgetType) == kTypeCell;
@@ -514,6 +526,21 @@ void UpdateFrame(uint32_t scene) {
     if (done && !restarting) g_update = UpdateWait{};
 }
 
+// The main menu's quit row was chosen: close the game.
+bool QuitRowChosen(uint32_t scene) {
+    const uint32_t grid = FindTyped(
+        scene, bus_read_u16(scene + kSceneActiveGrid), kTypeGrid);
+    if (!grid || bus_read_u32(grid + kGridCells) != kMainGridArray)
+        return false;
+    const uint32_t row = bus_read_u16(grid + kGridRow);
+    if (row >= bus_read_u16(grid + kGridRows) ||
+        bus_read_u16(kMainGridArray + 2u * row) != kQuitCell)
+        return false;
+    std::fprintf(stderr, "[title] quit chosen from the main menu\n");
+    nds_frontend_request_exit();
+    return true;
+}
+
 // The main menu's save row was chosen: ask for the dialog.
 bool SaveRowChosen(uint32_t scene) {
     const uint32_t grid = FindTyped(
@@ -551,7 +578,9 @@ void Event(uint32_t scene) {
     // the handler (a reset, another screen): the wait is over.
     if (g_update.waiting) g_update = UpdateWait{};
     if (!g_menu.open) {
-        if (!SaveRowChosen(scene) && !UpdateRowChosen(scene)) Open(scene);
+        if (!SaveRowChosen(scene) && !UpdateRowChosen(scene) &&
+            !QuitRowChosen(scene))
+            Open(scene);
         return;
     }
     const uint32_t held = bus_read_u16(kPadHeld);
@@ -693,7 +722,7 @@ NDS_TITLE_HOOK bool Dq9OptionsMenu(uint32_t* r0, uint32_t* r1, uint32_t* r2,
     return false;
 }
 
-// ---- The save row, the update row and the version line -----------------
+// ---- The save row, the update row, the quit row and the version line ---
 
 namespace {
 
@@ -710,8 +739,9 @@ struct BuilderCalls {
 
 BuilderCalls g_builder;
 
-// The main menu's rows top to bottom, the save row's included, and the
-// update row's when `update`, or none in a mode without them.
+// The main menu's rows top to bottom, the save row's included, the update
+// row's when `update`, and the quit row's last, or none in a mode without
+// them.
 std::vector<uint32_t> MainRows(uint8_t mode, bool update) {
     std::vector<uint32_t> rows;
     if (mode == 1u || mode == 5u)
@@ -719,6 +749,7 @@ std::vector<uint32_t> MainRows(uint8_t mode, bool update) {
     else if (mode == 2u)
         rows = {kMainCells[0], kSaveCell, kMainCells[1]};
     if (!rows.empty() && update) rows.push_back(kUpdateCell);
+    if (!rows.empty()) rows.push_back(kQuitCell);
     return rows;
 }
 
@@ -732,7 +763,8 @@ void SetCellText(uint32_t scene, uint32_t id, uint32_t address, uint32_t size,
 }
 
 // What the builder hook asks of the game for rows `rows`: the save row's
-// cell, the update row's when an update is out, and the version line.
+// cell, the update row's when an update is out, the quit row's and the
+// version line.
 void QueueBuilderCalls(uint32_t scene, uint32_t rows) {
     std::deque<GuestCall>& q = g_builder.queue;
     const uint32_t language = bus_read_u8(dq9::kGameTextLanguage);
@@ -758,6 +790,15 @@ void QueueBuilderCalls(uint32_t scene, uint32_t rows) {
                      [scene, update](uint32_t) {
                          SetCellText(scene, kUpdateCell, kUpdateRowText,
                                      kUpdateRowTextSize, UpdateRowText(update));
+                     }});
+    }
+    if (!FindWidget(scene, kQuitCell)) {
+        q.push_back({kFnNewCell,
+                     {scene, kQuitCell, kCellGroup, kMainMenuLayer, kTextRowsId,
+                      static_cast<uint32_t>(kRowX), 0u, 10u, 1u},
+                     [scene, language](uint32_t) {
+                         SetCellText(scene, kQuitCell, kQuitRowText, kQuitRowTextSize,
+                                     dq9::Tr("main_menu", "quit", language));
                      }});
     }
 
@@ -860,16 +901,16 @@ NDS_TITLE_HOOK void Dq9SaveRowLayout(uint32_t* r1, uint32_t* r5, uint32_t* r7,
         cells.push_back(cell);
     }
     const uint32_t count = static_cast<uint32_t>(ids.size());
-    // As the game's three rows in six tiles; four rows get eight, five ten
-    // (rows 1 to 10, clear of the summary from row 12).
-    const uint32_t height = count == 5u ? 10u : count == 4u ? 8u : 6u;
-    const int top = count == 5u ? 9 : count == 4u ? 8 : 6;
+    // As the game's three rows in six tiles; four rows get eight, five ten,
+    // six eleven (rows 1 to 11, clear of the summary from row 12).
+    const uint32_t height = count >= 6u ? 11u : count == 5u ? 10u : count == 4u ? 8u : 6u;
+    const int top = count >= 6u ? 7 : count == 5u ? 9 : count == 4u ? 8 : 6;
     for (uint32_t i = 0; i < count; ++i) {
         bus_write_u16(cells[i] + kCellY,
                       static_cast<uint16_t>(top + kRowPitch * static_cast<int>(i)));
         bus_write_u16(kMainGridArray + 2u * i, static_cast<uint16_t>(ids[i]));
         // Our rows run the Options row's handler, which tells them apart.
-        if (ids[i] == kSaveCell || ids[i] == kUpdateCell)
+        if (ids[i] == kSaveCell || ids[i] == kUpdateCell || ids[i] == kQuitCell)
             bus_write_u16(cells[i] + kCellAction, kOptionsHandler);
     }
     bus_write_u32(grid + kGridCells, kMainGridArray);

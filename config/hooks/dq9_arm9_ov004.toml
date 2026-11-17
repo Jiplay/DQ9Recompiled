@@ -89,9 +89,10 @@ jump_address = 0x0216FA40 # bx r12
 # 0x60, 1, [sp] 1, [sp+4] width, [sp+8] height, ...), r7 = the width, then
 # adds width * height * 32 to r5 (0x60) for the save summary's panel (211,
 # from tile row 12 down at most). Before each call the hook lays the rows
-# out (save row above Options, cell +0x3C y), points the grid at them and
-# makes the panel two tiles taller: rows 1 three to four rows, 6 to 8
-# tiles; rows 2 two to three rows, 5 to 6 tiles (as rows 1 had).
+# out (save row above Options, the update row when there is one and the
+# quit row at the bottom, cell +0x3C y), points the grid at them and makes
+# the panel taller to fit them: 6 tiles for three rows, 8 for four, 10 for
+# five, 11 for six (rows 1 to 11, clear of the summary from row 12).
 [[hook]]
 address = 0x0216CEDC      # bl 0x021F7EB8 (rows 1)
 mode = "arm"

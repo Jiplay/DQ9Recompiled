@@ -5,6 +5,7 @@ options = "Opzioni"
 import_save = "Importa salvataggio"
 export_save = "Esporta salvataggio"
 update = "Aggiorna a {}"
+quit = "Esci dal gioco"
 
 [camp_menu]
 options_description = "Modifica le impostazioni generali, di schermo e dei comandi."

@@ -10,6 +10,8 @@ export_save = "Export save file"
 # Shown when a newer release is out (src/hooks/options_row.cpp); {} is
 # its version.
 update = "Update to {}"
+# The last row: closes the game (src/hooks/options_row.cpp).
+quit = "Quit game"
 
 # The Misc. list's Options row (src/hooks/camp_options.cpp).
 [camp_menu]
