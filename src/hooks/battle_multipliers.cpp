@@ -1,10 +1,13 @@
 // Battle multipliers (Options > Multipliers, [title] mult_* in
 // settings.toml, 1x by default): scale the damage the party deals and takes,
-// the EXP and gold a battle gives, and the chance of item drops. Values are hundredths (100 = 1x).
+// the EXP and gold a battle gives, and the chance of item drops. Values are
+// hundredths (100 = 1x).
 //
-// Solo only for now: the values are the local settings. In multiplayer every
-// machine simulates the battle itself (lockstep), so the host's values will
-// have to reach the guests first (HANDOFF_BATTLE_MULTIPLIERS.md).
+// Alone or hosting, the values are this machine's settings. Visiting another
+// player's world they are the host's, and the Options pages show the rows
+// locked (options_model.h Locked()): in multiplayer every machine simulates
+// the battle itself (lockstep), so all must use the same values. The host's
+// values do not reach the guests yet, so a guest plays at 1x for now.
 //
 // Hooks (config/hooks/dq9_arm9_ov023.toml, dq9_arm9_ov024.toml):
 // - EXP: ov023 0x021EE4F4, where every machine goes once the battle's EXP
@@ -25,7 +28,10 @@
 //   boss items are a percentage (0x0207430C(rng, 100) < chance), scaled at
 //   0x021F47E0. A sure drop (1/1, 100%) stays sure below 1x.
 #include <cstdint>
+#include <cstdio>
+#include <string>
 
+#include "battle_multipliers.h"
 #include "title_hooks.h"
 #include "title_settings.h"
 
@@ -83,11 +89,48 @@ uint32_t Scale(uint32_t value, int percent, uint32_t cap) {
 
 bool IsParty(int16_t id) { return id >= 0 && id < kPartySlots; }
 
+// The game's multiplayer state (0x0202C550): the comm object (what
+// 0x0202AE28 returns), whose first word is set while a session is on, and
+// this machine's player index (0x0202DF68), 0 for the host.
+constexpr uint32_t kComm = 0x020FEFECu;
+constexpr uint32_t kPlayerIndex = 0x021015A0u;  // u16
+
+// The multiplier `id` applies now: this machine's setting, or the host's
+// while visiting.
+int Multiplier(int id) {
+    if (!dq9::VisitingAnotherWorld()) return nds_title_setting_value(id);
+    const NdsTitleSetting* setting = id == kDamageDealtId ? &kDamageDealt
+                                   : id == kDamageTakenId ? &kDamageTaken
+                                   : id == kExpId         ? &kExp
+                                   : id == kGoldId        ? &kGold
+                                                          : &kDrops;
+    return dq9::HostMultiplier(std::string("title.") + setting->key);
+}
+
 }  // namespace
+
+bool dq9::VisitingAnotherWorld() {
+    const bool active = bus_read_u32(kComm) != 0;
+    const uint32_t index = bus_read_u16(kPlayerIndex);
+    const bool visiting = active && index != 0;
+    static int logged = -1;  // the state last logged, -1 = none yet
+    const int state = active ? (visiting ? 2 : 1) : 0;
+    if (state != logged) {
+        logged = state;
+        std::fprintf(stderr, "[dq9-mult] multiplayer %s, player index %u: %s\n",
+                     active ? "on" : "off", index,
+                     visiting ? "visiting, host's multipliers"
+                              : "own multipliers");
+    }
+    return visiting;
+}
+
+// Not received from the host yet: 1x for every row.
+int dq9::HostMultiplier(const std::string&) { return 100; }
 
 // Before `ldr r1, [r7, #0x29C]` at 0x021EE4F4 (r7 = battle ctrl).
 NDS_TITLE_HOOK void Dq9BattleExpScale(uint32_t* ctrl) {
-    const int percent = nds_title_setting_value(kExpId);
+    const int percent = Multiplier(kExpId);
     if (percent == 100) return;
     for (uint32_t slot = 0; slot < 4u; ++slot) {
         const uint32_t addr = *ctrl + kExpPerSlot + slot * 4u;
@@ -97,7 +140,7 @@ NDS_TITLE_HOOK void Dq9BattleExpScale(uint32_t* ctrl) {
 
 // Before `str r0, [r7]` at 0x021F51EC (r0 = gold won).
 NDS_TITLE_HOOK void Dq9BattleGoldScale(uint32_t* gold) {
-    *gold = Scale(*gold, nds_title_setting_value(kGoldId), kMaxGold);
+    *gold = Scale(*gold, Multiplier(kGoldId), kMaxGold);
 }
 
 // Before `str r0, [sp, #0x54]` at 0x021EC7AC (r0 = damage of the hit).
@@ -106,14 +149,14 @@ NDS_TITLE_HOOK void Dq9BattleDamageScale(uint32_t* damage, uint32_t* sp) {
     const int16_t attacker = static_cast<int16_t>(bus_read_u16(*sp + kAttackerId));
     const int16_t target = static_cast<int16_t>(bus_read_u16(*sp + kTargetId));
     if (IsParty(attacker) == IsParty(target)) return;
-    const int percent = nds_title_setting_value(
+    const int percent = Multiplier(
         IsParty(target) ? kDamageTakenId : kDamageDealtId);
     *damage = Scale(*damage, percent, kMaxDamage);
 }
 
 // Before `mov r0, r1` at 0x021F4A00 / 0x021F4AC8 (r1 = N of a 1/N drop roll).
 NDS_TITLE_HOOK void Dq9BattleDropOdds(uint32_t* odds) {
-    const int percent = nds_title_setting_value(kDropsId);
+    const int percent = Multiplier(kDropsId);
     const int32_t n = static_cast<int32_t>(*odds);
     if (percent == 100 || n <= 1) return;
     const int64_t scaled = static_cast<int64_t>(n) * 100 / percent;
@@ -122,7 +165,7 @@ NDS_TITLE_HOOK void Dq9BattleDropOdds(uint32_t* odds) {
 
 // Before `ldr r0, [sp, #0x14]` at 0x021F47E0 (r8 = % chance of the item).
 NDS_TITLE_HOOK void Dq9BattleDropPercent(uint32_t* chance) {
-    const int percent = nds_title_setting_value(kDropsId);
+    const int percent = Multiplier(kDropsId);
     const int32_t c = static_cast<int32_t>(*chance);
     if (percent == 100 || c <= 0 || c >= 100) return;
     *chance = Scale(static_cast<uint32_t>(c), percent, 100u);

@@ -92,6 +92,7 @@ d_title_mult_damage_taken = "Multiplica el da<~n>o que los enemigos causan al gr
 d_title_mult_exp = "Multiplica los puntos de experiencia ganados en combate."
 d_title_mult_gold = "Multiplica el oro ganado en combate."
 d_title_mult_drops = "Multiplica la probabilidad de que los enemigos derrotados suelten un objeto."
+d_locked_by_host = "Lo decide el anfitri<'o>n mientras visitas otro mundo."
 v_0_25x = "0,25x"
 v_0_5x = "0,5x"
 v_0_75x = "0,75x"

@@ -92,6 +92,7 @@ d_title_mult_damage_taken = "Multiplie les d<'e>g<^a>ts que les ennemis infligen
 d_title_mult_exp = "Multiplie les points d'exp<'e>rience gagn<'e>s en combat."
 d_title_mult_gold = "Multiplie l'or gagn<'e> en combat."
 d_title_mult_drops = "Multiplie la chance que les ennemis vaincus laissent un objet."
+d_locked_by_host = "R<'e>gl<'e> par l'h<^o>te pendant que vous visitez un autre monde."
 v_0_25x = "0,25x"
 v_0_5x = "0,5x"
 v_0_75x = "0,75x"

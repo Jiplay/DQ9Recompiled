@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "battle_multipliers.h"
 #include "lang.h"
 #include "title_hooks.h"
 #include "title_menu.h"
@@ -78,6 +79,12 @@ inline bool Hidden(const NdsTitleMenuRow& row) {
            (row.type != NdsTitleMenuRowType::Bool &&
             row.type != NdsTitleMenuRowType::Int &&
             row.type != NdsTitleMenuRowType::Choice);
+}
+
+// Shown but not changeable: the battle multipliers while visiting another
+// player's world, where the host's values apply (and are shown).
+inline bool Locked(const NdsTitleMenuRow& row) {
+    return dq9::IsBattleMultiplier(row.key) && dq9::VisitingAnotherWorld();
 }
 
 // The pages' layout: which category each row goes in, and the order of the
@@ -157,6 +164,7 @@ inline std::vector<NdsTitleMenuRow> Arranged(std::vector<NdsTitleMenuRow> rows) 
 }
 
 inline int ValueOf(const Model& model, const NdsTitleMenuRow& row) {
+    if (Locked(row)) return dq9::HostMultiplier(row.key);
     const auto it = model.pending.find(row.key);
     return it != model.pending.end() ? it->second : row.value;
 }
@@ -207,6 +215,7 @@ inline std::string DescriptionText(const Row& row) {
     case Row::Kind::Category:
         return Text("d_cat_" + Slug(row.section), "");
     case Row::Kind::Item:
+        if (Locked(row.item)) return Text("d_locked_by_host", "Set by the host.");
         return Text("d_" + Slug(row.item.key), row.item.description);
     default:
         return "";
@@ -290,6 +299,7 @@ inline bool SetValue(Model& model, const NdsTitleMenuRow& row, int value) {
 // Steps the row's value. direction: -1 left, +1 right, 0 chosen (steps
 // forward and wraps). True when the value changed.
 inline bool Change(Model& model, const NdsTitleMenuRow& row, int direction) {
+    if (Locked(row)) return false;
     const int value = ValueOf(model, row);
     switch (row.type) {
     case NdsTitleMenuRowType::Bool:

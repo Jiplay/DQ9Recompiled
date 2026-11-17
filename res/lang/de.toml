@@ -92,6 +92,7 @@ d_title_mult_damage_taken = "Vervielfacht den Schaden, den Gegner der Gruppe zuf
 d_title_mult_exp = "Vervielfacht die im Kampf erhaltenen Erfahrungspunkte."
 d_title_mult_gold = "Vervielfacht das im Kampf erhaltene Gold."
 d_title_mult_drops = "Vervielfacht die Chance, dass besiegte Gegner einen Gegenstand fallen lassen."
+d_locked_by_host = "Vom Gastgeber festgelegt, solange du eine andere Welt besuchst."
 v_0_25x = "0,25x"
 v_0_5x = "0,5x"
 v_0_75x = "0,75x"
