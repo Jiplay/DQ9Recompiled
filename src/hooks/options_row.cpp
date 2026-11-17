@@ -2,8 +2,7 @@
 // language the game shows its text in, and the WFC icon stays hidden.
 // Choosing the row opens the runtime menu's settings as pages of the title
 // menu itself: one page of categories, then one page of options per
-// category. See config/hooks/dq9_arm9_ov004.toml for the guest code and
-// HANDOFF_OPTIONS_MENU.md for how the title scene works.
+// category. See config/hooks/dq9_arm9_ov004.toml for the guest code.
 //
 // The pages are made of the title scene's own widgets: entry cells drawn in
 // its full-screen panel (212), picked through the main menu's grid, and the

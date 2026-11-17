@@ -462,7 +462,7 @@ NDS_TITLE_HOOK void Dq9MouseMenuEquipCategory(uint32_t* s) {
     bus_write_u32(bus_read_u32(w + 44u), rest % cols);
 }
 
-// The top screen (see HANDOFF_TOP_SCREEN.md and config/hooks/dq9_arm9_ov017.toml).
+// The top screen (see config/hooks/dq9_arm9_ov017.toml).
 //
 // A click on one of the party's names in the row at the bottom of the top
 // screen (the overworld) opens that member's equipment page, as choosing

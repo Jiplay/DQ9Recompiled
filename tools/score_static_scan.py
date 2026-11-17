@@ -5,7 +5,7 @@ Ground truth is the union of every entry in the given manifests
 (`entry_points_<cpu>`, schema 4) plus, optionally, the promoted seeds in
 coverage/entry-points.json. A union is the right truth for every region:
 manifests captured after main seeds were built simply contribute ~0
-main-image entries (see HANDOFF_STATIC_SCANNER.md §2a "Ground-truth bias").
+main-image entries.
 
 Scanner output is one or more generated `<bank>_dispatch.c` files. A
 dispatch row is an address the runtime can enter compiled code at: a

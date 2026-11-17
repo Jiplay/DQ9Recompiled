@@ -2,7 +2,7 @@
 // hands over the WMGameInfo of every beacon this instance transmits as an
 // MP host (ndsrecomp runner/src/net/mp_beacon.h); this reads the free party
 // slots and the host's name out of DQ9's user game info. Read-only, no
-// guest state involved. See HANDOFF_ONLINE_LOBBY.md Phase 1b.
+// guest state involved.
 //
 // User game info (36 bytes), from beacons with 1, 2 and 3 party members
 // (owner run, 2026-11-09):
