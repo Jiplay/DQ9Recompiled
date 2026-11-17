@@ -598,3 +598,90 @@ address = 0x02024794      # str r5, [r4, #0x44] (r5 / r6 = centre x / y)
 mode = "arm"
 name = "Dq9TopMapPan"
 registers = ["r4", "r5", "r6", "sp"]
+
+# Unlimited quests (the General > Unlimited quests setting). Handler:
+# src/hooks/quest_limit.cpp; the audit behind it is in that file's comment.
+#
+# The quest manager 0x02109418 holds the accepted quests as a u8 count and
+# 8 sorted 16-byte slots at +4 (word 0: id in bits 0-8, flags above; u16
+# progress counters at +4..+14), with other quest data from +0x84. The
+# save copies mgr[0, 0xA0). Past 8 quests the slots move to free ITCM
+# (0x01FFF280) and every walk of the slots is pointed there: each site's
+# `base = mgr + 4` gets Dq9QuestSlotBase after it.
+[[hook]]
+address = 0x02096164      # add r3, r0, #4 (find 0x02096144: slot base)
+mode = "arm"
+name = "Dq9QuestSlotBase"
+registers = ["r3"]
+when = "after"
+
+[[hook]]
+address = 0x02062CB4      # add r3, r0, #4 (script cmd 0x90: unbounded find)
+mode = "arm"
+name = "Dq9QuestSlotBase"
+registers = ["r3"]
+when = "after"
+
+[[hook]]
+address = 0x0209522C      # ldr r1, =0x0210941C (questorder turn-in records:
+mode = "arm"              # kept only for quests in the slots)
+name = "Dq9QuestSlotBase"
+registers = ["r1"]
+when = "after"
+
+# The limit: accept 0x020961C0 returns 0 at count >= 8, and script
+# condition 0x57 (in 0x0205FB04) asks count == 8 / count < 8 for the
+# givers' "too many quests" branch.
+[[hook]]
+address = 0x020961D4      # cmp r0, #8 (r0 = count)
+mode = "arm"
+name = "Dq9QuestAcceptLimit"
+registers = ["r0"]
+
+[[hook]]
+address = 0x020617F0      # cmp r1, #0 (r0 = count, r1 = which question)
+mode = "arm"
+name = "Dq9QuestFullCheck"
+registers = ["r0"]
+
+# Insert 0x02096304 (slot passed by value: r1-r3 + stack, spilled to
+# sp+0x94 after the prologue) refuses at 8 and copies the 8 slots through a
+# 0x80-byte stack buffer; past 8 the handler inserts and the game's tail
+# sets the state and raises the count.
+[[hook]]
+address = 0x02096318      # cmp r0, #8 (r0 = count, r5 = mgr)
+mode = "arm"
+name = "Dq9QuestInsert"
+registers = ["r0", "r5", "sp"]
+on_true = "jump"
+jump_address = 0x02096434 # bl 0x0205EC44 (state 2, ++count, return 1)
+on_false = "continue"
+
+# Remove 0x0209646C (from turn-in 0x02095D0C and cancel 0x02095D40):
+# searches mgr+4 and closes the gap through a 0x90-byte stack buffer.
+[[hook]]
+address = 0x0209646C      # function entry (r0 = mgr, r1 = quest id)
+mode = "arm"
+name = "Dq9QuestRemove"
+registers = ["r0", "r1"]
+on_true = "return"
+on_false = "continue"
+
+# Save: 0x020A9EC8 builds the image (state machine 0x020AAD2C writes it to
+# EEPROM [0x10, 0x6FF4) and the backup copy at 0x8010). Load: 0x020AAF94
+# and 0x020AB324 (from ov31) copy the block back into mgr.
+[[hook]]
+address = 0x020AA928      # bl 0x02075ADC (r1 = mgr, r2 = 0xA0)
+mode = "arm"
+name = "Dq9QuestSave"
+registers = ["r1", "r2"]
+
+[[hook]]
+address = 0x020AB104      # bl 0x02094D7C, after the 0xA0 copy into mgr
+mode = "arm"
+name = "Dq9QuestLoad"
+
+[[hook]]
+address = 0x020AB4C0      # bl 0x02094D7C, after the 0xA0 copy into mgr
+mode = "arm"
+name = "Dq9QuestLoad"

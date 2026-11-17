@@ -99,6 +99,7 @@ struct Placement {
 inline constexpr Placement kLayout[] = {
     {"title.language", "General"},
     {"title.skip_intros", "General"},
+    {"title.unlimited_quests", "General"},
     {"audio.volume", "General"},
     {"audio.mute", "General"},
     {"netplay.enabled", "General"},

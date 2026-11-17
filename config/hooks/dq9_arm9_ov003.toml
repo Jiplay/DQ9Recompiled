@@ -93,3 +93,12 @@ address = 0x0215F3F0      # cmp r7, #0 (r7 = key under the pen, or 0)
 mode = "arm"
 name = "Dq9MouseMenuKeyFound"
 registers = ["r7", "r10"]
+
+# Unlimited quests (see dq9_arm9.toml): the vocation change marks every
+# slot with bit 17 with bit 18, walking the slots from mgr+4.
+[[hook]]
+address = 0x02157540      # add r2, r0, #4 (r3 = count next)
+mode = "arm"
+name = "Dq9QuestSlotBase"
+registers = ["r2"]
+when = "after"

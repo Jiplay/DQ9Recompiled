@@ -60,3 +60,34 @@ address = 0x021DA214      # beq (Z = pen not down; list redraw)
 mode = "arm"
 name = "Dq9MouseMenuListGreen"
 registers = ["cpsr"]
+
+# Unlimited quests (see dq9_arm9.toml): the end of a battle walks the
+# slots from mgr+4 for battle-tracked quests (bit 16), by index across
+# frames (a1+0x558C).
+[[hook]]
+address = 0x021F3234      # add r1, r7, #4 (collect ids)
+mode = "arm"
+name = "Dq9QuestSlotBase"
+registers = ["r1"]
+when = "after"
+
+[[hook]]
+address = 0x021F3380      # add r4, r7, #4 (next index)
+mode = "arm"
+name = "Dq9QuestSlotBase"
+registers = ["r4"]
+when = "after"
+
+[[hook]]
+address = 0x021F34D4      # add r4, r7, #4 (slot[index] id)
+mode = "arm"
+name = "Dq9QuestSlotBase"
+registers = ["r4"]
+when = "after"
+
+[[hook]]
+address = 0x021F360C      # add r7, r7, #4 (slot[index] |= bit 15)
+mode = "arm"
+name = "Dq9QuestSlotBase"
+registers = ["r7"]
+when = "after"

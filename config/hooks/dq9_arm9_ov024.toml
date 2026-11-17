@@ -1,0 +1,15 @@
+# Unlimited quests (see dq9_arm9.toml; handler src/hooks/quest_limit.cpp):
+# 0x021DF71C matches the accepted quests against a 7-entry table of
+# battle-condition quests, walking the slots from mgr+4.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov024"
+sha1 = "e0502f5dee15044ee0dc3c8342ecb1223dd47568"
+
+[[hook]]
+address = 0x021DF770      # add r0, r11, #4 (each iteration)
+mode = "arm"
+name = "Dq9QuestSlotBase"
+registers = ["r0"]
+when = "after"
