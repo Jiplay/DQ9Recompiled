@@ -1,6 +1,6 @@
 // Battle multipliers (Options > Multipliers, [title] mult_* in
 // settings.toml, 1x by default): scale the damage the party deals and takes,
-// and the EXP and gold a battle gives. Values are hundredths (100 = 1x).
+// the EXP and gold a battle gives, and the chance of item drops. Values are hundredths (100 = 1x).
 //
 // Solo only for now: the values are the local settings. In multiplayer every
 // machine simulates the battle itself (lockstep), so the host's values will
@@ -18,6 +18,12 @@
 //   hit) before it goes to sp+0x54, the value the action handler applies and
 //   shows. Scaled only when attacker and target are on opposite sides, so a
 //   heal or a hit on an ally (confusion) keeps its value.
+// - Drops: ov023 0x021F454C, run by the battle leader only (the others get
+//   the result with message 102's drop list). Each defeated monster's rare
+//   and common item is a 1/N roll (0x02032380(N) == 0 is a hit): N is
+//   divided by the multiplier at 0x021F4A00 / 0x021F4AC8. The treasure-map
+//   boss items are a percentage (0x0207430C(rng, 100) < chance), scaled at
+//   0x021F47E0. A sure drop (1/1, 100%) stays sure below 1x.
 #include <cstdint>
 
 #include "title_hooks.h"
@@ -47,11 +53,14 @@ constexpr NdsTitleSetting kExp = Multiplier(
     "mult_exp", "Experience", "Experience points won in battle.");
 constexpr NdsTitleSetting kGold = Multiplier(
     "mult_gold", "Gold", "Gold won in battle.");
+constexpr NdsTitleSetting kDrops = Multiplier(
+    "mult_drops", "Item drops", "Chance that defeated enemies drop an item.");
 
 const int kDamageDealtId = nds_title_setting_register(&kDamageDealt);
 const int kDamageTakenId = nds_title_setting_register(&kDamageTaken);
 const int kExpId = nds_title_setting_register(&kExp);
 const int kGoldId = nds_title_setting_register(&kGold);
+const int kDropsId = nds_title_setting_register(&kDrops);
 
 constexpr uint32_t kExpPerSlot = 22360u;   // ctrl+: u32[4], party slots
 constexpr uint32_t kMaxExp = 0xFFFFFFu;    // message 106 sends 24 bits
@@ -100,4 +109,21 @@ NDS_TITLE_HOOK void Dq9BattleDamageScale(uint32_t* damage, uint32_t* sp) {
     const int percent = nds_title_setting_value(
         IsParty(target) ? kDamageTakenId : kDamageDealtId);
     *damage = Scale(*damage, percent, kMaxDamage);
+}
+
+// Before `mov r0, r1` at 0x021F4A00 / 0x021F4AC8 (r1 = N of a 1/N drop roll).
+NDS_TITLE_HOOK void Dq9BattleDropOdds(uint32_t* odds) {
+    const int percent = nds_title_setting_value(kDropsId);
+    const int32_t n = static_cast<int32_t>(*odds);
+    if (percent == 100 || n <= 1) return;
+    const int64_t scaled = static_cast<int64_t>(n) * 100 / percent;
+    *odds = static_cast<uint32_t>(scaled < 1 ? 1 : scaled > 0x7FFFFFFF ? 0x7FFFFFFF : scaled);
+}
+
+// Before `ldr r0, [sp, #0x14]` at 0x021F47E0 (r8 = % chance of the item).
+NDS_TITLE_HOOK void Dq9BattleDropPercent(uint32_t* chance) {
+    const int percent = nds_title_setting_value(kDropsId);
+    const int32_t c = static_cast<int32_t>(*chance);
+    if (percent == 100 || c <= 0 || c >= 100) return;
+    *chance = Scale(static_cast<uint32_t>(c), percent, 100u);
 }

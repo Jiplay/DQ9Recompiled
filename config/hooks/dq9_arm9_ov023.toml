@@ -109,3 +109,25 @@ address = 0x021F51EC      # str r0, [r7]
 mode = "arm"
 name = "Dq9BattleGoldScale"
 registers = ["r0"]
+
+# Drops: 0x021F454C (leader only, battle end) rolls each defeated monster's
+# rare then common item as 1/N, 0x02032380(N) returning 0 on a hit; r1 = N
+# (after the thief-style bonus passes have divided it).
+[[hook]]
+address = 0x021F4A00      # mov r0, r1 (rare drop, 1/N)
+mode = "arm"
+name = "Dq9BattleDropOdds"
+registers = ["r1"]
+
+[[hook]]
+address = 0x021F4AC8      # mov r0, r1 (common drop, 1/N)
+mode = "arm"
+name = "Dq9BattleDropOdds"
+registers = ["r1"]
+
+# Same function, treasure-map boss items: 0x0207430C(rng, 100) < r8 (a %).
+[[hook]]
+address = 0x021F47E0      # ldr r0, [sp, #0x14] (before the 0..99 roll)
+mode = "arm"
+name = "Dq9BattleDropPercent"
+registers = ["r8"]

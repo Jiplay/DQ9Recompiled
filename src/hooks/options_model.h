@@ -89,7 +89,7 @@ inline bool Hidden(const NdsTitleMenuRow& row) {
 //   General   set once: language first, intros, sound, Netplay
 //   Display   what the picture looks like, the frame rate first
 //   Controls  menus, camera and gamepad
-//   Multipliers  battle damage, EXP and gold
+//   Multipliers  battle damage, EXP, gold and drops
 // Only the category changes: the keys, and so settings.toml, stay as they
 // are. A row not named here (System, or one added later) comes after these
 // in the runtime menu's order, in the page PageSection picks; Hidden() runs
@@ -123,6 +123,7 @@ inline constexpr Placement kLayout[] = {
     {"title.mult_damage_taken", "Multipliers"},
     {"title.mult_exp", "Multipliers"},
     {"title.mult_gold", "Multipliers"},
+    {"title.mult_drops", "Multipliers"},
 };
 
 // The page for a row kLayout does not name.
