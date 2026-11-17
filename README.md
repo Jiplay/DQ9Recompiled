@@ -36,6 +36,11 @@ On first launch it asks for your ROM and unpacks it into `assets/eu` in the
 data folder (the `.nds` can then be moved or deleted); the game packs them
 back into a cartridge every time it starts.
 
+The USA release (`YDQE`) works too: its data is the same as Europe's, and
+the build rebuilds the European code from its ROM when it unpacks it (into
+`assets/us`). The game then runs as the European one: same saves, same
+savestates and netplay lobbies.
+
 Settings, saves and the unpacked ROM live in a per-user folder, or
 next to the executable if a `portable.txt` file is there:
 
@@ -83,6 +88,13 @@ python3 scripts/build.py
 The first build unpacks `dq9.nds` into `assets/eu/` and builds from that
 folder from then on (`dq9.nds` is no longer needed). A runner started from
 the repository finds `assets/eu/` on its own.
+
+USA support needs the USA ROM at build time, unpacked as `assets/us/`
+(`ndsrecomp/tools/nds_folder.py unpack usa.nds assets/us`): the build
+compares the two releases and writes a recipe
+(`ndsrecomp/tools/release_recipe.py`) that rebuilds the European code from
+the USA files and the banks. Without `assets/us/` the build runs only the
+European ROM.
 `ndsrecomp/tools/nds_folder.py unpack|pack` converts between the two by hand.
 
 `python3 scripts/build.py --package` then packs the build as the release asset

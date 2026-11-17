@@ -9,8 +9,10 @@ rom = "dq9.nds"
 rom_size = 0x10000000
 sha1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 
-# The known releases. The player's ROM is unpacked into <data>/assets/<id>;
-# only the one with [game].sha1 runs on this build.
+# The known releases. The player's ROM is unpacked into <data>/assets/<id>.
+# The one with [game].sha1 runs on this build as it is; a release the build
+# has a recipe for (scripts/build.py RECIPE_RELEASES: us) gets its code
+# rebuilt as Europe's when it is unpacked, and then runs the same way.
 [[game.releases]]
 id = "eu"
 name = "Europe"

@@ -20,6 +20,21 @@ RUNNER_BUILD_DIR = "build-runner"
 ROM_FILE = "dq9.nds"
 ROM_DIR = os.path.join("assets", "eu")
 RECOMP_NET_DIR = "recomp-net"
+# Other releases whose players can run this build: a recipe rebuilds the
+# Europe code from their ROM (ndsrecomp/tools/release_recipe.py) and is built
+# into the executable. Made from assets/<id>, the release unpacked next to
+# ROM_DIR; a release whose folder is missing is left out.
+RECIPE_RELEASES = ("us",)
+RECIPE_DIR = os.path.join("generated", "recipes")
+RECIPE_OPTIONS = [
+    "--prefix", "dq9",
+    # Overlay 29's banks are built from its decrypted image
+    # (tools/ov029_unprotect.py), not the bytes on the cartridge.
+    "--skip-bank", "ov029",
+    # The secure area holds SDK functions between random filler; the
+    # functions are validated, the filler can be the other release's.
+    "--filler", "arm9.bin:0x0-0x800",
+]
 
 # The self-updater checks UPDATE_REPO's latest GitHub release for an asset
 # named ASSET_FORMAT ({tag} the release tag, {platform} platform_id()) plus
@@ -208,6 +223,30 @@ def build_banks(args, compilers, python):
          "--target", "dq9_romcheck", "dq9_generate_banks"])
 
 
+def make_recipes(python):
+    """A recipe per RECIPE_RELEASES folder present; stale ones are removed."""
+    os.makedirs(RECIPE_DIR, exist_ok=True)
+    for release in RECIPE_RELEASES:
+        out = os.path.join(RECIPE_DIR, f"{release}.recipe")
+        if os.path.exists(out):
+            os.remove(out)
+        folder = os.path.join("assets", release)
+        if not os.path.exists(os.path.join(folder, "rom.toml")):
+            print(f"note: {folder}/ not found; the build will not run the "
+                  f"{release} release", flush=True)
+            continue
+        run([python, "-I",
+             os.path.join("ndsrecomp", "tools", "release_recipe.py"), "make",
+             ROM_DIR, folder, os.path.join("generated", "recomp"), out]
+            + RECIPE_OPTIONS)
+
+
+def recipe_files():
+    return [os.path.abspath(os.path.join(RECIPE_DIR, f"{release}.recipe"))
+            for release in RECIPE_RELEASES
+            if os.path.exists(os.path.join(RECIPE_DIR, f"{release}.recipe"))]
+
+
 def ensure_freebios_banks():
     """Recompile the FreeBIOS images the runner links, if they are missing."""
     recompiler = os.path.join(BANK_BUILD_DIR, "ndsrecomp-recompiler",
@@ -234,6 +273,7 @@ def build_runner(args, compilers):
         f"-DNDS_TITLE_BANK_DIR={cmake_path(os.path.join('generated', 'recomp'))}",
         f"-DNDS_TITLE_ROM_SHA1={ROM_SHA1}",
         f"-DNDS_TITLE_CONFIG={cmake_path('game.toml')}",
+        f"-DNDS_RELEASE_RECIPES={';'.join(cmake_path(r) for r in recipe_files())}",
         f"-DNDS_INTERPRETER={'ON' if args.interpreter else 'OFF'}",
         f"-DNDSRECOMP_COMPILE_JOBS={args.jobs}",
         # game.toml boots on FreeBIOS with a generated firmware, so the retail
@@ -417,6 +457,7 @@ def main():
         python = ensure_venv()
         ensure_rom_folder(python)
         build_banks(args, compilers, python)
+        make_recipes(python)
         ensure_freebios_banks()
         if args.banks_only:
             # The hooks' text, which the runner build would generate.
