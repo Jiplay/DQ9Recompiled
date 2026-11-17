@@ -209,6 +209,8 @@ def build_runner(args, compilers):
     if not args.no_hooks:
         # The hooks' own text (res/lang/*.toml -> src/hooks/lang.generated.h).
         run([sys.executable, os.path.join("scripts", "gen-lang.py")])
+        # English place names for the Discord activity, from the ROM.
+        run([sys.executable, os.path.join("scripts", "gen-map-names.py")])
         hooks_dir = os.path.join("src", "hooks")
         hooks = sorted(cmake_path(os.path.join(hooks_dir, f))
                        for f in os.listdir(hooks_dir) if f.endswith(".cpp"))
@@ -374,6 +376,7 @@ def main():
         if args.banks_only:
             # The hooks' text, which the runner build would generate.
             run([sys.executable, os.path.join("scripts", "gen-lang.py")])
+            run([sys.executable, os.path.join("scripts", "gen-map-names.py")])
             return
     elif not os.path.isdir(os.path.join("generated", "recomp")):
         die("generated/recomp missing: run without --runner-only first")

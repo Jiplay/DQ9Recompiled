@@ -60,6 +60,13 @@ enabled = true
 provider = "dq9-dlc"   # label only; dns_server wins
 dns_server = "172.104.88.237"
 
+# Discord Rich Presence: "<hero> Lv. <level>" and "Exploring <place>" (or
+# "Fighting in <place>") on the player's Discord profile, while the Discord
+# desktop app runs. The application is DQ9Recompiled's (Developer Portal);
+# its icon shows with the activity. Players turn it off under Options.
+[discord]
+application_id = "1572233082193584198"
+
 # Local wireless (DQ9's multiplayer, the Rapportal) between runners on this
 # machine and on the local network: they find each other by UDP broadcast on
 # ports 26710-26725, so Windows asks once to allow the runner through its
