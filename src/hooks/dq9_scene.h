@@ -48,6 +48,8 @@ inline bool TitleScreen() {
 // Samples the scene for the forced screen layouts (screen_layouts.cpp), at a
 // consistent point on the CPU thread: G3_SwapBuffers, from Dq9WindowLayers.
 void SampleScreenLayout();
+// The same for the camera's on-screen buttons (camera_rotation.cpp).
+void SampleCameraButtons();
 
 // In battle: the battle routes engine A (the 3D) to the top LCD, POWCNT1
 // bit 15 set, for as long as it runs, from the transition in to the fade

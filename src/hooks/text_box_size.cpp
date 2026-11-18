@@ -355,6 +355,7 @@ bool Window2dShown() {
 // G3_SwapBuffers entry, once per 3D frame.
 NDS_TITLE_HOOK void Dq9WindowLayers() {
     dq9::SampleScreenLayout();
+    dq9::SampleCameraButtons();
     const bool choice = g_choice_drawn;
     g_choice_drawn = false;
     const double scale = UiScale();

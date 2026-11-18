@@ -129,6 +129,7 @@ inline constexpr Placement kLayout[] = {
     {"title.mouse_friendly", "Controls"},
     {"title.camera_mode", "Controls"},
     {"title.unlock_camera_rotation", "Controls"},
+    {"title.camera_buttons", "Controls"},
     {"input.gamepad_layout", "Controls"},  // hidden with custom bindings
     {"title.mult_damage_dealt", "Multipliers"},
     {"title.mult_damage_taken", "Multipliers"},
