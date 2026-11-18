@@ -106,8 +106,8 @@ jobs:
       - name: Install dependencies (Linux)
         if: startsWith(matrix.platform, 'linux')
         run: |
-          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 20
-          sudo apt-get install -y ninja-build python3-venv libcurl4-openssl-dev \
+          sudo apt-get update
+          sudo apt-get install -y clang ninja-build python3-venv libcurl4-openssl-dev \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
             libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols \
             libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev \
@@ -117,8 +117,8 @@ jobs:
       - name: Install dependencies (Android)
         if: matrix.platform == 'android-arm64' && env.ANDROID_BUILD == 'true'
         run: |
-          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 20
-          sudo apt-get install -y ninja-build python3-venv
+          sudo apt-get update
+          sudo apt-get install -y clang ninja-build python3-venv
 
       - name: Install dependencies (macOS)
         if: startsWith(matrix.platform, 'mac-')
