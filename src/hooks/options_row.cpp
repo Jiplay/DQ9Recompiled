@@ -237,6 +237,7 @@ using namespace dq9::options;
 
 struct Menu : Model {
     bool open = false;
+    bool closing = false;  // Back chosen, waiting for the title's text
     uint32_t scene = 0;
     uint32_t grid = 0;
     uint32_t described = ~0u;  // the row the description is of
@@ -425,6 +426,19 @@ void Open(uint32_t scene) {
     Then([](uint32_t) { ShowPage(); });
 }
 
+void Close();
+
+// Back to the main menu, once the menu's text is in the language chosen on
+// the pages (language.cpp reloads it in a few frames): until then the page
+// stays up and takes no input, and Frame closes it.
+void RequestClose() {
+    if (dq9::TitleTextPending()) {
+        g_menu.closing = true;
+        return;
+    }
+    Close();
+}
+
 // Back to the main menu: what opening.stb's command 44 does for the rows'
 // and the summary's groups (remove their widgets, reset their arenas), then
 // its own label that rebuilds the main menu.
@@ -432,6 +446,7 @@ void Close() {
     const uint32_t scene = g_menu.scene;
     RestoreGrid();
     g_menu.open = false;
+    g_menu.closing = false;
     for (const uint32_t id : {kPagePanel, kDescPanel}) {
         if (const uint32_t panel = FindTyped(scene, id, kTypePanel))
             Call(kFnPanelClose, {panel});
@@ -573,6 +588,7 @@ void Event(uint32_t scene) {
             bus_read_u32(g_menu.grid + kGridCells) == kGridArray;
         RestoreGrid();
         g_menu.open = false;
+        g_menu.closing = false;
         if (stale) return;
     }
     // An event while waiting for an update means the scene stopped running
@@ -584,6 +600,7 @@ void Event(uint32_t scene) {
             Open(scene);
         return;
     }
+    if (g_menu.closing) return;
     const uint32_t held = bus_read_u16(kPadHeld);
     const uint32_t pressed = held & ~bus_read_u16(kPadPrevious);
     const uint32_t index = bus_read_u16(g_menu.grid + kGridRow);
@@ -592,7 +609,7 @@ void Event(uint32_t scene) {
     if (!(pressed & kKeyA)) {
         if (pressed & kKeyB) {
             if (g_menu.section.empty()) {
-                Close();
+                RequestClose();
             } else {
                 g_menu.section.clear();
                 ShowPage();
@@ -616,7 +633,7 @@ void Event(uint32_t scene) {
     default:
         if (direction != 0) break;
         if (g_menu.section.empty()) {
-            Close();
+            RequestClose();
         } else {
             g_menu.section.clear();
             ShowPage();
@@ -637,9 +654,14 @@ void Frame(uint32_t scene) {
     if (scene != g_menu.scene || !PageShown(scene)) {
         RestoreGrid();
         g_menu.open = false;
+        g_menu.closing = false;
         return;
     }
     bus_write_u32(scene + kSceneIdleTime, 0u);
+    if (g_menu.closing) {
+        if (!dq9::TitleTextPending()) Close();
+        return;
+    }
     // Rows the frontend changed on its own (signing in or out, the lobby
     // server's state) redraw the page; a few times a second is enough.
     if (++g_menu.polled % 10 == 0) {

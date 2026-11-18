@@ -131,3 +131,32 @@ address = 0x021F47E0      # ldr r0, [sp, #0x14] (before the 0..99 roll)
 mode = "arm"
 name = "Dq9BattleDropPercent"
 registers = ["r8"]
+
+# The title's menu text and logo, reloaded in a new language
+# (src/hooks/language.cpp). ov11's scene step updates the scene's widgets
+# every frame through 0x021F68DC(widgets = scene+0x118, scene); at its entry
+# the hook sends the title's string table and logo back to their first load
+# step when the language changed.
+[[hook]]
+address = 0x021F68DC      # push {r4, r5, r6, lr}
+mode = "arm"
+name = "Dq9TitleWidgets"
+registers = ["r0", "r1"]
+
+# The string table parser 0x021FA644(table, scene, data, size) looks up the
+# table's group (table+8) with ov11 0x021845F8 and parses into the heap at
+# node+4 (0x020728BC, all of it through 0x02032554). After that lookup the
+# hook gives a reload its own node.
+[[hook]]
+address = 0x021FA670      # mov r4, r0 (r0 = the group node, r8 = the table)
+mode = "arm"
+name = "Dq9TitleTextHeap"
+registers = ["r0", "r8"]
+
+# The background parser 0x021F7AAC(background, scene, data, size), the same
+# way: its CHAR and PAL chunks go to VRAM, its SCRN chunks into the heap.
+[[hook]]
+address = 0x021F7AD0      # movs r5, r0 (r0 = the group node, r10 = the background)
+mode = "arm"
+name = "Dq9TitleLogoHeap"
+registers = ["r0", "r10"]

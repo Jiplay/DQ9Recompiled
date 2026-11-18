@@ -139,6 +139,20 @@ registers = ["lr"]
 on_true = "jump"
 jump_address = 0x020E5124 # reload the articles and standard strings
 
+# The title's menu text and logo (str_op_<LG>.bin, bg_up_<LG>.pac),
+# reloaded when the language changes on the title, parse into memory of
+# their own (src/hooks/language.cpp, config/hooks/dq9_arm9_ov023.toml):
+# their group node's heap is a marker this hook answers. 0x02032554(heap,
+# size) allocates from a heap wrapper (+0 the NNS heap, 0 for none; +4 its
+# allocator), and every allocation of both parsers goes through it. True: return r0,
+# the memory, at the entry, before anything is pushed.
+[[hook]]
+address = 0x02032554      # push {r3, r4, r5, lr} (r0 = heap, r1 = size)
+mode = "arm"
+name = "Dq9TitleTextAlloc"
+registers = ["r0", "r1"]
+on_true = "return"
+
 # UI size (the Game > UI size setting).
 # Handler: src/hooks/text_box_size.cpp.
 #

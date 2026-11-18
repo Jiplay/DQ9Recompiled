@@ -13,6 +13,10 @@ namespace dq9 {
 // DS firmware codes, 1 English .. 5 Spanish). See language.cpp.
 constexpr uint32_t kGameTextLanguage = 0x020F33D8u + 5u;
 
+// The title screen is still loading its menu text in a newly chosen
+// language (language.cpp): the main menu would show the old one.
+bool TitleTextPending();
+
 // The text for [section] key in DS language `language`, English when that
 // language lacks it or is out of range, "" when English lacks it too.
 inline const char* Tr(const char* section, const char* key, uint32_t language) {
