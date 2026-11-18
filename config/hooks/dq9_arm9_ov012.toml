@@ -19,3 +19,59 @@ address = 0x02185D34      # beq (Z = pen not down; list redraw)
 mode = "arm"
 name = "Dq9MouseMenuListGreen"
 registers = ["cpsr"]
+
+# Netplay chat on the game's own keyboard, the Profile Settings scene
+# (handler: src/hooks/game_chat.cpp; the field's side is in
+# dq9_arm9_ov017.toml). The scene's step 0x02184ACC runs the page at
+# scene+0x1371 (table 0x0218B188; state at +0x1370): 1 the menu (entry 4,
+# Greeting, is page 14), 14 the Greeting editor 0x02188CD0 (the text at
+# scene+0x13D0, ov3's keyboard), 15 the exit. Then, when 0x021959B4 says the
+# multiplayer session pulls the player out, it closes all at once
+# (0x02184CD4), after checking a Greeting being typed as its OK does.
+[[hook]]
+address = 0x02186B0C      # cmp r0, #0 (r0 = a menu entry was chosen, r5 = scene)
+mode = "arm"
+name = "Dq9ChatProfileMenu"
+registers = ["r0", "r5"]
+
+[[hook]]
+address = 0x02188D34      # bl 0x0202F7A8 (after the profile's greeting was copied in)
+mode = "arm"
+name = "Dq9ChatGreetingText"
+registers = ["r5"]
+
+[[hook]]
+address = 0x02188F84      # cmp r0, #0 (B pressed; r0 = the text's first byte)
+mode = "arm"
+name = "Dq9ChatGreetingBack"
+registers = ["r0"]
+
+[[hook]]
+address = 0x02188FBC      # cmp r0, #0xB (r0 = the keyboard step's result, 10 = OK; r5 = scene)
+mode = "arm"
+name = "Dq9ChatGreetingStep"
+registers = ["r0", "r5"]
+
+[[hook]]
+address = 0x0218AB84      # mov r1, #1 (r0 = the keyboard window's title, text 14)
+mode = "arm"
+name = "Dq9ChatGreetingPrompt"
+registers = ["r0"]
+
+[[hook]]
+address = 0x02189140      # bl 0x020426CC (r1 = the profile's greeting)
+mode = "arm"
+name = "Dq9ChatGreetingSave"
+registers = ["r1"]
+
+[[hook]]
+address = 0x02184C4C      # cmp r0, #0 (r0 = 0x021959B4, pulled out of the menus)
+mode = "arm"
+name = "Dq9ChatForceClose"
+registers = ["r0"]
+
+[[hook]]
+address = 0x02184CD4      # add r2, r6, #0x1000 (closing all; r6 = scene)
+mode = "arm"
+name = "Dq9ChatClose"
+registers = ["r6"]

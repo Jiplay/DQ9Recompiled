@@ -115,3 +115,32 @@ address = 0x0218C78C      # b 0x0218C798 (r0 = VBlanks, r7 = 2 - r0)
 mode = "arm"
 name = "Dq9FrameRate"
 registers = ["r0", "r7"]
+
+# Netplay chat on the game's own keyboard (handler: src/hooks/game_chat.cpp;
+# the scene's side is in dq9_arm9_ov012.toml). A pad's Start in the field
+# opens Profile Settings > Greeting, whose OK sends the text as a chat line.
+#
+# The field's menu check 0x021A51A4(mgr) runs while the task queue at
+# mgr+0x36FC is empty. X (r8) queues the camp menu's task, mgr+0x371C, with
+# 0x020469C4. The Profile Settings task is mgr+0x3B54: type 0x2F, step
+# 0x021C17FC (state at +28; +29 "from the camp menu": load overlay 3 and,
+# when the scene closed all at once, scene+0x14BC, end back in the field;
+# the scene at +32), set up by 0x021C17CC and queued by 0x021C1798.
+[[hook]]
+address = 0x021A53A0      # cmp r8, #0 (r8 = X pressed, r5 = mgr, r7 = hero)
+mode = "arm"
+name = "Dq9ChatFieldMenu"
+registers = ["r5", "r7", "r8"]
+
+[[hook]]
+address = 0x021A53FC      # ldr r1, [r1, #0x71C] (the camp menu's task, queued next)
+mode = "arm"
+name = "Dq9ChatQueueTask"
+registers = ["r1", "r5"]
+when = "after"
+
+[[hook]]
+address = 0x021C17FC      # push (r0 = the Profile Settings task)
+mode = "arm"
+name = "Dq9ChatProfileTask"
+registers = ["r0"]

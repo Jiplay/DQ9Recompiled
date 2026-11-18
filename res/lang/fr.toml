@@ -114,3 +114,7 @@ v_1_5x = "1,5x"
 v_2x = "2x"
 v_3x = "3x"
 v_5x = "5x"
+
+# The game's keyboard typing a netplay chat line (src/hooks/game_chat.cpp).
+[chat]
+prompt = "Tapez votre message"
