@@ -22,9 +22,13 @@ ROM_DIR = os.path.join("assets", "eu")
 RECOMP_NET_DIR = "recomp-net"
 # Other releases whose players can run this build: a recipe rebuilds the
 # Europe code from their ROM (ndsrecomp/tools/release_recipe.py) and is built
-# into the executable. Made from assets/<id>, the release unpacked next to
-# ROM_DIR; a release whose folder is missing is left out.
+# into the executable. The recipes are in git (recipes/<id>.recipe) with
+# their literal bytes (the few bytes of Europe code they carry) blanked; the
+# build fills them in from ROM_DIR and checks the recipe against the banks,
+# so only the Europe ROM is needed. With assets/<id>, the release unpacked
+# next to ROM_DIR, the recipe in git is made again first.
 RECIPE_RELEASES = ("us",)
+RECIPE_SOURCE_DIR = "recipes"
 RECIPE_DIR = os.path.join("generated", "recipes")
 RECIPE_OPTIONS = [
     "--prefix", "dq9",
@@ -224,21 +228,38 @@ def build_banks(args, compilers, python):
 
 
 def make_recipes(python):
-    """A recipe per RECIPE_RELEASES folder present; stale ones are removed."""
+    """Fill in each RECIPE_RELEASES recipe for the build, making it again
+    first when its release is unpacked."""
+    tool = os.path.join("ndsrecomp", "tools", "release_recipe.py")
+    recomp = os.path.join("generated", "recomp")
     os.makedirs(RECIPE_DIR, exist_ok=True)
     for release in RECIPE_RELEASES:
+        source = os.path.join(RECIPE_SOURCE_DIR, f"{release}.recipe")
         out = os.path.join(RECIPE_DIR, f"{release}.recipe")
-        if os.path.exists(out):
-            os.remove(out)
+        made = os.path.join(RECIPE_DIR, f"{release}.made.recipe")
+        for stale in (out, made):
+            if os.path.exists(stale):
+                os.remove(stale)
         folder = os.path.join("assets", release)
-        if not os.path.exists(os.path.join(folder, "rom.toml")):
-            print(f"note: {folder}/ not found; the build will not run the "
-                  f"{release} release", flush=True)
+        if os.path.exists(os.path.join(folder, "rom.toml")):
+            run([python, "-I", tool, "make", ROM_DIR, folder, recomp, made]
+                + RECIPE_OPTIONS)
+            run([python, "-I", tool, "blank", made, source])
+        elif not os.path.exists(source):
+            print(f"note: neither {folder}/ nor {source} found; the build "
+                  f"will not run the {release} release", flush=True)
             continue
-        run([python, "-I",
-             os.path.join("ndsrecomp", "tools", "release_recipe.py"), "make",
-             ROM_DIR, folder, os.path.join("generated", "recomp"), out]
-            + RECIPE_OPTIONS)
+        if run([python, "-I", tool, "fill", source, ROM_DIR, recomp, out],
+               check=False).returncode != 0:
+            die(f"{source} no longer fits the banks: make it again by "
+                f"building with the {release} release unpacked in {folder}/, "
+                f"and commit it")
+        if os.path.exists(made):
+            with open(made, "rb") as a, open(out, "rb") as b:
+                if a.read() != b.read():
+                    die(f"{out}: filling {source} did not give back the "
+                        f"recipe made from {folder}/")
+            os.remove(made)
 
 
 def recipe_files():
