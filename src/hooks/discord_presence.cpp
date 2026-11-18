@@ -4,11 +4,16 @@
 //     <hero's name>, Lv. <level> <vocation>
 //     Exploring <place> / Fighting in <place>
 //
+// The player's name is also the netplay chat's name on the LAN.
+//
 // Read-only, from the frontend thread about once a second.
 //
 // The party (main loop context 0x020F33D8, the object 0x0200F398 returns):
-// the member entities at ctx+8 + 4 * id, id 0 the hero, live while bit 11
-// of the entity's first halfword is set (0x0200FE00). From the entity, as
+// the member entities at ctx+8 + 4 * id (0x0200FF2C), live while bit 11
+// of the entity's first halfword is set (0x0200FE00). The player of this
+// machine is the id at ctx+940 (0x020100B8; 0x020730F0 takes it for "me"):
+// 0 alone or hosting, a guest's own index in someone else's world, where
+// id 0 is the host's hero. From the entity, as
 // the party's status tabs read them (0x020200D0, 0x02022DD8):
 //   +308  the stats record; its name at +0, ASCII with tags for accents
 //         (DecodeName), zero-terminated (+48 / +50 max HP / MP)
@@ -34,7 +39,9 @@ namespace {
 
 constexpr uint32_t kCtx = 0x020F33D8u;
 constexpr uint32_t kCtxEntities = kCtx + 8u;
-constexpr uint32_t kHeroId = 0;
+constexpr uint32_t kCtxOwnId = kCtx + 940u;
+// Multiplayer has at most four players, ids 0-3.
+constexpr uint32_t kPlayers = 4u;
 constexpr uint16_t kEntityLive = 0x0800u;
 constexpr uint32_t kEntityStats = 308u;
 constexpr uint32_t kEntityCharacter = 336u;
@@ -115,9 +122,12 @@ const char* MapName(uint16_t id) {
     return it != end && it->id == id ? it->name : nullptr;
 }
 
-// The hero's name, vocation and level, or false outside the game.
+// This machine's player's name, vocation and level (the hero, or a guest's
+// own character), or false outside the game.
 bool Hero(std::string* name, const char** vocation_name, int* level) {
-    const uint32_t hero = bus_read_u32(kCtxEntities + 4u * kHeroId);
+    const uint32_t id = bus_read_u32(kCtxOwnId);
+    if (id >= kPlayers) return false;
+    const uint32_t hero = bus_read_u32(kCtxEntities + 4u * id);
     if (!InMainRam(hero, 0x200) || !(bus_read_u16(hero) & kEntityLive))
         return false;
     const uint32_t stats = bus_read_u32(hero + kEntityStats);
@@ -148,6 +158,7 @@ bool Read(NdsTitlePresence* out) {
     const char* vocation = nullptr;
     int level = 0;
     if (!Hero(&name, &vocation, &level)) return false;
+    out->player = name;
     out->details =
         name + ", Lv. " + std::to_string(level) + " " + vocation;
     const bool battle = dq9::InBattle();
