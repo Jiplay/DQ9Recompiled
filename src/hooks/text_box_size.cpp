@@ -76,7 +76,6 @@ constexpr int kAnchorY = 96;
 // alone and cover the 3D blended over it, and Stella's 3D speech box would
 // leave her behind.
 using dq9::FullScreenPage;
-using dq9::LoadedOverlay;
 
 // Only in the game proper (field, battle, camp menu). The boot sequence and
 // the title menu draw their art on the same BGs and are left as on the DS.
@@ -87,19 +86,17 @@ using dq9::LoadedOverlay;
 // apart.
 //
 // Continue sets mode 0 at once, but the title's fade-out still runs from
-// overlay 4 after that, so the game also needs overlay 4 gone from its slot.
-// Overlays 0..6 share slot 0 (see LoadedOverlay), and the field loads
-// another one there (the overworld: overlay 0, towns: overlay 3).
+// overlay 4 after that, so the game also needs the title's overlay 4 gone
+// (dq9::TitleScreen). Overlay 4 alone does not tell: grottoes load it in
+// the same slot too, from the field.
 constexpr uint32_t kMainMode = 0x020F33D8 + 4;
-constexpr uint32_t kTitleSlot = 0;
-constexpr int kTitleOverlay = 4;
 
 bool InGame() {
     switch (bus_read_u8(kMainMode)) {
         case 0: case 4: case 5: case 9: break;
         default: return false;
     }
-    return LoadedOverlay(kTitleSlot) != kTitleOverlay && !FullScreenPage();
+    return !dq9::TitleScreen() && !FullScreenPage();
 }
 
 }  // namespace
@@ -386,7 +383,9 @@ NDS_TITLE_HOOK void Dq9WindowLayers() {
         // With no 2D window up (the field walk) the whole touchscreen is
         // the walking stick, drawn and read at the DS's full size: the
         // split layers are empty, so a touch must not be pulled through
-        // their scale towards the centre.
-        nds_title_set_touch_unscaled(!Window2dShown());
+        // their scale towards the centre. The treasure search shows its
+        // HUD on BG2 but still walks under the stick.
+        nds_title_set_touch_unscaled(!Window2dShown() ||
+                                     dq9::TreasureSearch());
     }
 }

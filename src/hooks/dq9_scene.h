@@ -161,10 +161,45 @@ inline bool InnPage() {
     return bg1 == kCanvassBg1 && bus_read_u16(kBg0cntA) == 0;
 }
 
+// The treasure map (camp menu > Items > a treasure map), where the treasure
+// search starts: overlay 4 in slot 0, as the Attributes page, with BG0CNT
+// 0x0000, BG1CNT 0x1D01 (BG2 0x1E02, BG3 0x1F0B). Grottoes load overlay 4
+// there too, with the field's BG0CNT 0x0001 / 0x0002.
+inline bool TreasureMapPage() {
+    constexpr uint32_t kFieldSlot = 0;
+    constexpr int kMapOverlay = 4;
+    constexpr uint32_t kBg0cntA = 0x04000008;
+    constexpr uint32_t kBg1cntA = 0x0400000A;
+    constexpr uint32_t kBg2cntA = 0x0400000C;
+    return bus_read_u16(kBg1cntA) == 0x1D01 &&
+           bus_read_u16(kBg2cntA) == 0x1E02 &&
+           bus_read_u16(kBg0cntA) == 0 &&
+           LoadedOverlay(kFieldSlot) == kMapOverlay;
+}
+
+// The overworld's treasure search: the field keeps walking under the stick,
+// with its HUD on BG2. Engine A shows BG0..BG2 and the OBJs (DISPCNT
+// layers 0x17, BG3 off), with BG1CNT 0x1D01, BG2CNT 0x1E00 and BLDALPHA
+// 0x0709. The field walk has BG2 off (layers 0x13), the camp menu
+// 0x1D02 / 0x1E01 and BG3 on, the 2D message box BG3 on.
+inline bool TreasureSearch() {
+    constexpr uint32_t kDispcntA = 0x04000000;
+    constexpr uint32_t kBg1cntA = 0x0400000A;
+    constexpr uint32_t kBg2cntA = 0x0400000C;
+    constexpr uint32_t kBldalphaA = 0x04000052;
+    constexpr uint32_t kLayers = 0x1F00;
+    constexpr uint32_t kSearchLayers = 0x1700;
+    return (bus_read_u32(kDispcntA) & kLayers) == kSearchLayers &&
+           bus_read_u16(kBg1cntA) == 0x1D01 &&
+           bus_read_u16(kBg2cntA) == 0x1E00 &&
+           bus_read_u16(kBldalphaA) == 0x0709;
+}
+
 // Full-screen pages, left as on the DS by the UI size and the camera
-// distance: the battle records pages, the character pages and the inn's.
+// distance: the battle records pages, the character pages, the inn's and
+// the treasure map.
 inline bool FullScreenPage() {
-    return RecordsPage() || CharacterPage() || InnPage();
+    return RecordsPage() || CharacterPage() || InnPage() || TreasureMapPage();
 }
 
 }  // namespace dq9
