@@ -1,0 +1,36 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "Dragon Quest IX: Sentinels of the Starry Skies",
+  "wikidata": "Q2221461",
+  "system": "NDS",
+  "type": "recomp",
+  "project": "DQ9Recompiled",
+  "toolchain": "ndsrecomp",
+  "approach": "Static recompilation of the ARM9 and ARM7 code, every overlay and a FreeBIOS into native code, with no interpreter involved.",
+  "status": "playable",
+  "targets": [
+    "Windows",
+    "Linux",
+    "macOS",
+    "Android"
+  ],
+  "original": [
+    {
+      "region": "Europe",
+      "serial": "YDQP",
+      "sha1": "ff761d349709f329c8ac4bd0023fdce21861e8a1"
+    },
+    {
+      "region": "USA",
+      "serial": "YDQE",
+      "sha1": "c7c3014c237900c8281289b8bc76a781969b6278"
+    }
+  ],
+  "maintainers": [
+    {
+      "name": "BiRabittoh",
+      "link": "https://github.com/birabittoh"
+    }
+  ],
+  "notes": "Building from source needs the European ROM; the USA ROM is also supported to play the game."
+}
