@@ -295,6 +295,7 @@ jobs:
           NDS_VERSION_NAME: ${{ inputs.tag }}
         run: |
           hooks="$(ls "$PWD"/src/hooks/*.cpp | sort | paste -sd ';' -)"
+          recipes="$(ls "$PWD"/generated/recipes/*.recipe 2>/dev/null | sort | paste -sd ';' -)"
           cmake -G Ninja -S ndsrecomp/runner -B build-android \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -305,6 +306,7 @@ jobs:
             -DNDS_TITLE_BANK_DIR="$PWD/generated/recomp" \
             -DNDS_TITLE_ROM_SHA1="$ROM_SHA1" \
             -DNDS_TITLE_CONFIG="$PWD/game.toml" \
+            "-DNDS_RELEASE_RECIPES=$recipes" \
             -DNDS_INTERPRETER=OFF -DNDS_RETAIL_BIOS_BANKS=OFF -DNDS_EMBED_DUMPS_DIR= \
             -DNDS_ONLINE=ON -DNDS_RECOMP_NET_ROOT="$PWD/recomp-net" \
             -DNDS_UPDATE_REPO=birabittoh/DQ9Recompiled \
