@@ -79,9 +79,9 @@ enabled = true
 provider = "dq9-dlc"   # label only; dns_server wins
 dns_server = "172.104.88.237"
 
-# Discord Rich Presence: "<hero> Lv. <level>" and "Exploring <place>" (or
-# "Fighting in <place>") on the player's Discord profile, while the Discord
-# desktop app runs. The application is DQ9Recompiled's (Developer Portal);
+# Discord Rich Presence: "<hero>, Lv. <level> <vocation>" and "Exploring
+# <place>" (or "Fighting in <place>") on the player's Discord profile, while
+# the Discord desktop app runs. The application is DQ9Recompiled's (Developer Portal);
 # its icon shows with the activity. Players turn it off under Options.
 [discord]
 application_id = "1572233082193584198"

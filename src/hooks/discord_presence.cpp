@@ -1,7 +1,7 @@
 // Discord Rich Presence (ndsrecomp runner/src/title_presence.h), in English
 // whatever language the game runs in:
 //
-//     <hero's name> Lv. <level>
+//     <hero's name>, Lv. <level> <vocation>
 //     Exploring <place> / Fighting in <place>
 //
 // Read-only, from the frontend thread about once a second.
@@ -14,6 +14,8 @@
 //         (DecodeName), zero-terminated (+48 / +50 max HP / MP)
 //   +336  the character record: +2384 the vocation (u32), +364 a u16 level
 //         per vocation (0x0202054C)
+// The vocations' order is the game's, as its debug menu lists them
+// (data/bin/str_debug_en.bin): 0 none, 1 Warrior ... 12 Ranger.
 // The map being played is the u16 at 0x020FB3F0, the map manager's first
 // field (0x02024528 reads it), the field's own map during a battle too.
 // Its name comes from the game's English mapname table
@@ -39,6 +41,11 @@ constexpr uint32_t kEntityCharacter = 336u;
 constexpr uint32_t kCharacterVocation = 2384u;
 constexpr uint32_t kCharacterLevels = 364u;
 constexpr uint32_t kVocations = 13u;
+constexpr const char* kVocationNames[kVocations] = {
+    nullptr,  "Warrior",   "Priest",        "Mage",    "Martial Artist",
+    "Thief",  "Minstrel",  "Gladiator",     "Armamentalist", "Paladin",
+    "Sage",   "Luminary",  "Ranger",
+};
 // Room for 8 letters, each an accent tag at worst.
 constexpr uint32_t kNameBytes = 33u;
 constexpr uint32_t kMapId = 0x020FB3F0u;
@@ -108,8 +115,8 @@ const char* MapName(uint16_t id) {
     return it != end && it->id == id ? it->name : nullptr;
 }
 
-// The hero's name and level, or false outside the game.
-bool Hero(std::string* name, int* level) {
+// The hero's name, vocation and level, or false outside the game.
+bool Hero(std::string* name, const char** vocation_name, int* level) {
     const uint32_t hero = bus_read_u32(kCtxEntities + 4u * kHeroId);
     if (!InMainRam(hero, 0x200) || !(bus_read_u16(hero) & kEntityLive))
         return false;
@@ -122,7 +129,9 @@ bool Hero(std::string* name, int* level) {
     for (uint32_t i = 0; i < kNameBytes; ++i) bytes[i] = bus_read_u8(stats + i);
     *name = DecodeName(bytes, kNameBytes);
     const uint32_t vocation = bus_read_u32(character + kCharacterVocation);
-    if (name->empty() || vocation >= kVocations) return false;
+    if (name->empty() || vocation >= kVocations || !kVocationNames[vocation])
+        return false;
+    *vocation_name = kVocationNames[vocation];
     *level = bus_read_u16(character + kCharacterLevels + 2u * vocation);
     return *level > 0 && *level <= 99;
 }
@@ -136,9 +145,11 @@ bool Read(NdsTitlePresence* out) {
         return true;
     }
     std::string name;
+    const char* vocation = nullptr;
     int level = 0;
-    if (!Hero(&name, &level)) return false;
-    out->details = name + " Lv. " + std::to_string(level);
+    if (!Hero(&name, &vocation, &level)) return false;
+    out->details =
+        name + ", Lv. " + std::to_string(level) + " " + vocation;
     const bool battle = dq9::InBattle();
     out->state = battle ? "Fighting" : "Exploring";
     if (const char* place = MapName(bus_read_u16(kMapId)))
