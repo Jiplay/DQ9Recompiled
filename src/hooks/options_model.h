@@ -114,6 +114,7 @@ inline constexpr Placement kLayout[] = {
     {"title.language", "General"},
     {"title.skip_intros", "General"},
     {"title.unlimited_quests", "General"},
+    {"title.zoom_indoors", "General"},
     {"audio.mute", "General"},
     {"netplay.enabled", "General"},
     {"netplay.account", "General"},  // only while a sign-in is wanted

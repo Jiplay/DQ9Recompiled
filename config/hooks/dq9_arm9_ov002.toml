@@ -107,3 +107,22 @@ address = 0x0216659C      # add sp, sp, #0x14 (the end of the Misc. step)
 mode = "arm"
 name = "Dq9CampOptionsExit"
 registers = ["r8"]
+
+# Zoom indoors. Handler: src/hooks/zoom_indoors.cpp.
+#
+# 0x02165B44 is the camp menu step that runs once a Zoom destination (spell,
+# or chimaera wing when camp+0x1C22 is the item) is chosen. It reads the
+# current map's Zoom kind, bits 0-1 of byte +14 of the map info at
+# map manager (0x02012FF4) +8, forced to 0 while story flag 0x113A is set:
+#   2  warp to the destination;
+#   1  under a roof: 0x021ACD30(field, 0, 0, 1) starts the Zoom flight (field
+#      event 1, 0x021ACDF4) with its "ceiling" byte (+638) set, so the party
+#      rises, drops back and strstd message 0x39 ("bangs head on the ceiling")
+#      shows;
+#   0  not usable here at all, a message and back to the menu.
+# The hook makes the compare see 2 for 1.
+[[hook]]
+address = 0x02165CDC      # cmp r7, #2 ; bne 0x02165F58  (r7 = Zoom kind)
+mode = "arm"
+name = "Dq9ZoomIndoors"
+registers = ["r7"]
