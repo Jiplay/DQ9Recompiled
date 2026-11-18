@@ -1,9 +1,9 @@
-// Netplay chat typed on the game's own keyboard, for players on a gamepad
+// Netplay chat typed on the game's own keyboard
 // (ndsrecomp runner/src/net/netplay_chat.h, nds_netplay_chat_set_game_keyboard).
-// Start on a pad, in the field, opens the Greeting editor of Profile
-// Settings with an empty text; its OK sends the text as a chat line and goes
-// straight back to the field, B on the empty text just goes back. The
-// profile's greeting is never touched.
+// Holding the chat's Start (or its button) in the field opens the Greeting
+// editor of Profile Settings with an empty text; its OK sends the text as a
+// chat line and goes straight back to the field, B on the empty text just
+// goes back. The profile's greeting is never touched.
 //
 // The hooks are in config/hooks/dq9_arm9_ov017.toml (the field's menu check
 // and the Profile Settings task) and dq9_arm9_ov012.toml (the Profile
@@ -77,14 +77,13 @@ std::atomic<bool> g_send{false};
 // CPU thread only: close the scene, once its step gets there.
 bool g_close = false;
 
-// The frontend's chat Start: while typing, send (as OK does); on a pad in
-// the field, open the keyboard when the field is up and free.
-bool GameKeyboardStart(bool pad) {
+// The frontend's chat Start: while typing, send (as OK does); otherwise
+// open the keyboard when the field is up and free.
+bool GameKeyboardStart() {
     if (g_step.load(std::memory_order_acquire) == Step::Editing) {
         g_send.store(true, std::memory_order_release);
         return true;
     }
-    if (!pad) return false;
     const int64_t now = Now();
     if (now - g_field_seen_ms.load(std::memory_order_acquire) >
         kFieldFresh.count())
