@@ -56,10 +56,10 @@ jobs:
             runner: windows-latest
 
           - platform: linux-amd64
-            runner: ubuntu-24.04
+            runner: ubuntu-26.04
 
           - platform: linux-arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
 
           - platform: mac-amd64
             runner: macos-26-intel
@@ -68,7 +68,7 @@ jobs:
             runner: macos-26
 
           - platform: android-arm64
-            runner: ubuntu-24.04
+            runner: ubuntu-26.04
             ndk_version: "27.0.12077973"
     steps:
       - name: Checkout

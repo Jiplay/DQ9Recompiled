@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       short_sha: ${{ steps.sha.outputs.short_sha }}
       date_hhmm: ${{ steps.sha.outputs.date_hhmm }}

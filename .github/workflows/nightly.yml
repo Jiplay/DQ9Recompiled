@@ -18,7 +18,7 @@ env:
 
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       tag_name: ${{ steps.tag.outputs.tag_name }}
       prev_nightly_sha: ${{ steps.tag.outputs.prev_nightly_sha }}
@@ -55,7 +55,7 @@ jobs:
 
   publish:
     needs: [prepare, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6

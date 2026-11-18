@@ -20,7 +20,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -38,7 +38,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "DQ9Recompiled ${{ github.ref_name }}"
-          body: "You must own the game: put your Europe (YDQP) ROM next to the executable on first launch. See the [README](https://github.com/${{ github.repository }}#readme).\n\n"
           files: release-assets/*
           generate_release_notes: true
           fail_on_unmatched_files: true
