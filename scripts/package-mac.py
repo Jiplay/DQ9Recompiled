@@ -120,6 +120,10 @@ def build_app(app_path, version):
     shutil.copy2(src, exe)
     os.chmod(exe, 0o755)
 
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from recomplauncher import stage_manifest
+    stage_manifest(macos_dir, is_windows=False, is_macos=True)
+
     for name in FILES_IN_RESOURCES:
         shutil.copy2(os.path.join(ROOT, name), resources)
     bundle_libraries(exe, os.path.join(contents, "Frameworks"))

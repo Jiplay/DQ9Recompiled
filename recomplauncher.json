@@ -1,0 +1,42 @@
+{
+  "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
+  "format": 1,
+  "name": "DQ9Recompiled",
+  "repo": "birabittoh/DQ9Recompiled",
+  "game": {
+    "kind": "iso_or_folder",
+    "label": "Your Dragon Quest IX: Sentinels of the Starry Skies ROM (.nds), Europe (YDQP) or USA (YDQE), or a folder unpacked from one."
+  },
+  "start": {
+    "program": ["DQ9Recompiled.exe", "DQ9Recompiled"],
+    "args": ["{install}/assets/recomplauncher"]
+  },
+  "prepare": {
+    "program": ["DQ9Recompiled.exe", "DQ9Recompiled"],
+    "args": ["--prepare-content", "--source", "{game}", "--destination", "{install}/assets/recomplauncher"],
+    "label": "Unpacking your Dragon Quest IX ROM",
+    "timeout": 600,
+    "done": ["{install}/assets/recomplauncher/rom.toml"]
+  },
+  "folders": {
+    "saves": [
+      { "path": "{install}", "if": "{install}/portable.txt" },
+      { "path": "{data}" }
+    ],
+    "logs": [ { "path": "{install}/logs" } ]
+  },
+  "saves": [
+    "{data}/saves",
+    "{data}/savestates",
+    "{data}/settings.toml",
+    "{data}/generated-identity.bin"
+  ],
+  "exit_codes": {
+    "1": "The game could not start. Check its logs and prepare your copy again if needed.",
+    "2": "The content preparation command is invalid. Reinstall this build and try again."
+  },
+  "actions": [
+    { "id": "saves", "label": "Saves and settings", "open": "saves" },
+    { "id": "logs", "label": "Logs", "open": "logs" }
+  ]
+}

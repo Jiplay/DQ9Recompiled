@@ -12,13 +12,15 @@ import shutil
 import subprocess
 import sys
 
+from recomplauncher import stage_manifest
+
 ROM_SHA1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 PROJECT_NAME = "DQ9Recompiled"
 BANK_BUILD_DIR = "build"
 RUNNER_BUILD_DIR = "build-runner"
 # The ROM the banks are built from, unpacked; dq9.nds is unpacked into it.
 ROM_FILE = "dq9.nds"
-ROM_DIR = os.path.join("assets", "eu")
+ROM_DIR = os.path.join("assets", "YDQP")
 RECOMP_NET_DIR = "recomp-net"
 # Other releases whose players can run this build: a recipe rebuilds the
 # Europe code from their ROM (ndsrecomp/tools/release_recipe.py) and is built
@@ -27,7 +29,7 @@ RECOMP_NET_DIR = "recomp-net"
 # build fills them in from ROM_DIR and checks the recipe against the banks,
 # so only the Europe ROM is needed. With assets/<id>, the release unpacked
 # next to ROM_DIR, the recipe in git is made again first.
-RECIPE_RELEASES = ("us",)
+RECIPE_RELEASES = ("YDQE",)
 RECIPE_SOURCE_DIR = "recipes"
 RECIPE_DIR = os.path.join("generated", "recipes")
 RECIPE_OPTIONS = [
@@ -391,6 +393,9 @@ def do_package(name):
     for f in files:
         print(f"+ cp {f} {pkg_dir}/")
         shutil.copy2(f, pkg_dir)
+    # RecompLauncher reads it next to the executable.
+    stage_manifest(pkg_dir, IS_WINDOWS)
+    files.append("recomplauncher.json")
 
     if IS_WINDOWS:
         archive_path = f"{name}.zip"
