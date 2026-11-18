@@ -9,7 +9,8 @@
 // never above 1: a window smaller than that shows the UI as on the DS.
 // Everything scales about the screen centre (DS x 128, y 96), so the layout
 // between the windows stays as on the DS and the UI stays in the middle of
-// the scene. "Scale with window" turns it off.
+// the scene. "Scale with window" turns it off. The netplay chat overlay
+// (chat_overlay.h) takes the same scale.
 //
 // DQ9 draws its windows in two ways, handled separately below:
 //   * 3D: the message manager in 3D mode draws its window with the 3D
@@ -18,6 +19,7 @@
 //     main engine's text BGs.
 #include <cstdint>
 
+#include "chat_overlay.h"
 #include "gpu2d.h"
 #include "gpu3d.h"
 #include "title_hooks.h"
@@ -62,6 +64,9 @@ double UiScale() {
     if (points <= reference) return 1.0;
     return reference / static_cast<double>(points);
 }
+
+// The netplay chat drawn over the game follows the same size.
+const bool kChatScale = (nds_chat_overlay_set_scale_source(&UiScale), true);
 
 constexpr int kAnchorX = 128;
 constexpr int kAnchorY = 96;
