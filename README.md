@@ -11,6 +11,8 @@ dump of either the USA or PAL copy of the game.
 The game runs as compiled code from its first instruction, with no interpreter,
 on a recompiled FreeBIOS and a generated firmware.
 
+Feel free to visit DQ9Recompiled's [official Discord server](https://discord.gg/DJe2pXMH7S) if you need any help.
+
 ## Features
 
 * **Skip intros**: boots past the logos and the opening movie.
