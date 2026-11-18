@@ -1,12 +1,31 @@
-// Instant text: holding B (or the right mouse button, or two fingers on a
-// touchscreen, which the frontend reports as it) while a message box is
-// still printing its text prints the rest of the box at once, up to the next page break, wait or
-// choice (the game's own stops). See "Instant text" in
-// config/hooks/dq9_arm9.toml for the guest code behind the site.
+// Skip text (Quality of life > Skip text, [title] skip_text in
+// settings.toml, off by default): pressing B (or the right mouse button, or
+// two fingers on a touchscreen, which the frontend reports as it) while a
+// message box is still printing its text prints the rest of the box at
+// once, up to the next page break, wait or choice (the game's own stops).
+// Off, the text prints as on the DS. A right click advances the text as B
+// does either way. See "Instant text" in config/hooks/dq9_arm9.toml for the
+// guest code behind the site.
 #include "title_hooks.h"
 #include "title_settings.h"
 
 bool Dq9ChoiceListActive();  // mouse_menus.cpp
+
+namespace {
+constexpr const char* kChoices[] = {"Off", "On"};
+
+constexpr NdsTitleSetting kSkipText = {
+    "skip_text",
+    "Skip text",
+    "Pressing B, the right mouse button or two fingers shows the rest of a "
+    "message at once.",
+    0, 1, 1,
+    kChoices, sizeof(kChoices) / sizeof(kChoices[0]), nullptr,
+    0,
+};
+
+const int kSkipTextId = nds_title_setting_register(&kSkipText);
+}  // namespace
 
 namespace {
 // The game's key object (literal at 0x02044418): u16 +0 = keys held,
@@ -26,7 +45,9 @@ bool g_right_was_down = false;
 NDS_TITLE_HOOK void Dq9TextInstant(uint32_t* chars) {
     const bool right = nds_title_right_mouse_held();
     g_right_was_down = right;
-    if ((bus_read_u16(kKeys) & kKeyB) != 0u || right) *chars = 0x1000u;
+    if (nds_title_setting_value(kSkipTextId) != 0 &&
+        ((bus_read_u16(kKeys) & kKeyB) != 0u || right))
+        *chars = 0x1000u;
 }
 
 // Before `cmp r0, #0` at 0x02044168: r5 is the "advance" flag the game sets

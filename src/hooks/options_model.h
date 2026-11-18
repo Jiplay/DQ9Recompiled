@@ -97,9 +97,10 @@ inline bool Locked(const NdsTitleMenuRow& row) {
 // Input, then every title setting in Game); the pages group them by what a
 // player looks for, the most used first, and no page is left with only a row
 // or two:
-//   General   set once: language first, intros, sound, Netplay
+//   General   set once: language first, sound, Netplay
 //   Display   what the picture looks like, the frame rate first
 //   Controls  menus, camera and gamepad
+//   Quality of life  intros, text speed, quest limit, Zoom
 //   Multipliers  battle damage, EXP, gold and drops
 // Only the category changes: the keys, and so settings.toml, stay as they
 // are. A row not named here (System, or one added later) comes after these
@@ -112,9 +113,6 @@ struct Placement {
 
 inline constexpr Placement kLayout[] = {
     {"title.language", "General"},
-    {"title.skip_intros", "General"},
-    {"title.unlimited_quests", "General"},
-    {"title.zoom_indoors", "General"},
     {"audio.mute", "General"},
     {"netplay.enabled", "General"},
     {"netplay.account", "General"},  // only while a sign-in is wanted
@@ -132,6 +130,10 @@ inline constexpr Placement kLayout[] = {
     {"title.unlock_camera_rotation", "Controls"},
     {"title.camera_buttons", "Controls"},
     {"input.gamepad_layout", "Controls"},  // hidden with custom bindings
+    {"title.skip_intros", "Quality of life"},
+    {"title.skip_text", "Quality of life"},
+    {"title.unlimited_quests", "Quality of life"},
+    {"title.zoom_indoors", "Quality of life"},
     {"title.mult_damage_dealt", "Multipliers"},
     {"title.mult_damage_taken", "Multipliers"},
     {"title.mult_exp", "Multipliers"},

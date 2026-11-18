@@ -22,7 +22,7 @@ on a recompiled FreeBIOS and a generated firmware.
 * **Mouse-friendly menus**: hover to highlight, one click to choose.
 * **60 FPS mode**: Off, Fast or Accurate.
 * **Analog movement**: the left stick walks at any angle.
-* **Instant text**: press B, the right mouse button or double tap to print instantly.
+* **Skip text**: press B, the right mouse button or double tap to print instantly.
 * **Options**: every option is displayed natively in-game.
 * **Multiplayer**: local wireless over the LAN, and online lobbies with Netplay.
 

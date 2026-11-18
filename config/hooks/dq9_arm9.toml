@@ -402,7 +402,7 @@ mode = "arm"
 name = "Dq9MessageTopClick"
 registers = ["r0"]
 
-# Instant text (B prints the whole box). The message manager's step
+# Instant text (with the Skip text option, B prints the whole box). The message manager's step
 # _sub_020444E4_0 (0x020444E4, body 0x02065xxx) prints text each frame: R4 is
 # the speed (0x10 = one character per frame, 0x18 fast), the accumulator at
 # mgr+0x80 gains R4 * 16 (4-bit fraction) and R9 = the whole characters to
