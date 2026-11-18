@@ -8,7 +8,7 @@ one, whatever language the game runs in, floor or room included
 ("Stornway Castle - L1"); only the untranslated " - ???" suffix is dropped.
 
 The header is a gitignored build artifact, like lang.generated.h; with no
-ROM (assets/eu or dq9.nds) the table is empty and the activity shows no place.
+ROM (assets/YDQP or dq9.nds) the table is empty and the activity shows no place.
 """
 import os
 import re
@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(ROOT, "ndsrecomp", "tools"))
 import nds_folder  # noqa: E402
 
 # The unpacked ROM the build uses, else the .nds it is made from.
-ROM_PATHS = (os.path.join(ROOT, "assets", "eu"), os.path.join(ROOT, "dq9.nds"))
+ROM_PATHS = (os.path.join(ROOT, "assets", "YDQP"), os.path.join(ROOT, "dq9.nds"))
 OUT_PATH = os.path.join(ROOT, "src", "hooks", "map_names.generated.h")
 ARCHIVE = "data/map/mapname.gp2"
 ENTRY = "mapname_en.bin"

@@ -6,7 +6,7 @@ Static recompilation of **Dragon Quest IX: Sentinels of the Starry Skies**
 
 **You must own the game.** This project does **not** ship any copyrighted code,
 data, or assets: no ROM, BIOS, firmware or generated code. You provide your own
-dump as `dq9.nds`.
+dump of either the USA or PAL copy of the game.
 
 The game runs as compiled code from its first instruction, with no interpreter,
 on a recompiled FreeBIOS and a generated firmware.
@@ -32,14 +32,8 @@ on a recompiled FreeBIOS and a generated firmware.
 ./DQ9Recompiled
 ```
 
-On first launch it asks for your ROM and unpacks it into `assets/eu` in the
-data folder (the `.nds` can then be moved or deleted); the game packs them
-back into a cartridge every time it starts.
-
-The USA release (`YDQE`) works too: its data is the same as Europe's, and
-the build rebuilds the European code from its ROM when it unpacks it (into
-`assets/us`). The game then runs as the European one: same saves, same
-savestates and netplay lobbies.
+On first launch it asks for your ROM and unpacks it into `assets/<code>` in the
+data folder; your `.nds` can then be moved or deleted.
 
 Settings, saves and the unpacked ROM live in a per-user folder, or
 next to the executable if a `portable.txt` file is there:
@@ -85,29 +79,15 @@ Put your ROM in the repository root as `dq9.nds`, then:
 python3 scripts/build.py
 ```
 
-The first build unpacks `dq9.nds` into `assets/eu/` and builds from that
+The first build unpacks `dq9.nds` into `assets/YDQP/` and builds from that
 folder from then on (`dq9.nds` is no longer needed). A runner started from
-the repository finds `assets/eu/` on its own.
-
-USA support needs the USA ROM at build time, unpacked as `assets/us/`
-(`ndsrecomp/tools/nds_folder.py unpack usa.nds assets/us`): the build
-compares the two releases and writes a recipe
-(`ndsrecomp/tools/release_recipe.py`) that rebuilds the European code from
-the USA files and the banks. Without `assets/us/` the build runs only the
-European ROM.
-`ndsrecomp/tools/nds_folder.py unpack|pack` converts between the two by hand.
+the repository finds `assets/YDQP/` on its own.
 
 `python3 scripts/build.py --package` then packs the build as the release asset
 the updater looks for (`DQ9Recompiled-<tag>-<platform>.zip`, `.tar.gz` on Linux,
 `.dmg` on macOS). The version a build compares releases against is the newest
 `v*` tag (or `--version X.Y.Z`, or `NDS_VERSION_NAME`); with none, the updater
 is off.
-
-Pushing a `v*` tag builds every platform and publishes a release
-(`.github/workflows/release.yml`). The workflows need the ROM, which is not in
-git: put `dq9.nds` in a release of a private repository and set the
-`ASSETS_REPO` variable (`owner/name`) and the `ASSETS_TOKEN` secret (a token
-that can read it).
 
 If you already cloned without `--recursive`, run
 `git submodule update --init --recursive` first.
@@ -122,6 +102,7 @@ other options (`--release`, `--no-online`, `--no-hooks`, ...).
 * [ndsrecomp](https://github.com/mstan/ndsrecomp)
 * [recomp-net](https://github.com/RetroPortingToolKit/recomp-net)
 * [melonDS](https://melonds.kuribo64.net/)
+* [dqix-decomp](https://github.com/dqix/dqix-decomp)
 
 ## License
 

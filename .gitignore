@@ -1,6 +1,6 @@
 # User-owned Nintendo DS images and ROM-derived outputs.
 *.nds
-# The ROM unpacked (scripts/build.py makes assets/eu from dq9.nds).
+# The ROM unpacked (scripts/build.py makes assets/YDQP from dq9.nds).
 /assets/
 /generated/
 /extracted/

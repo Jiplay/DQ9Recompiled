@@ -11,20 +11,20 @@ sha1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 
 # The known releases. The player's ROM is unpacked into <data>/assets/<id>.
 # The one with [game].sha1 runs on this build as it is; a release the build
-# has a recipe for (scripts/build.py RECIPE_RELEASES: us) gets its code
+# has a recipe for (scripts/build.py RECIPE_RELEASES: YDQE) gets its code
 # rebuilt as Europe's when it is unpacked, and then runs the same way.
 [[game.releases]]
-id = "eu"
+id = "YDQP"
 name = "Europe"
 sha1 = "ff761d349709f329c8ac4bd0023fdce21861e8a1"
 
 [[game.releases]]
-id = "us"
+id = "YDQE"
 name = "USA"
 sha1 = "c7c3014c237900c8281289b8bc76a781969b6278"
 
 [[game.releases]]
-id = "jp"
+id = "YDQJ"
 name = "Japan"
 sha1 = "4b219246c06343ad56cedfb183ea3bd737776eda"
 

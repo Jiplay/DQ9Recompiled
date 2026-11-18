@@ -14,7 +14,7 @@ include("${NDSRECOMP_ROOT}/cmake/NdsJobPools.cmake")
 add_subdirectory("${NDSRECOMP_ROOT}/recompiler"
                  "${CMAKE_BINARY_DIR}/ndsrecomp-recompiler")
 
-set(DQ9_ROM "${CMAKE_CURRENT_SOURCE_DIR}/assets/eu" CACHE PATH
+set(DQ9_ROM "${CMAKE_CURRENT_SOURCE_DIR}/assets/YDQP" CACHE PATH
     "The verified Europe YDQP ROM: a .nds, or a folder unpacked from one")
 # An unpacked folder changes through its files; rom.toml lists them all.
 if(IS_DIRECTORY "${DQ9_ROM}")

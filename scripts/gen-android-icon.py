@@ -2,7 +2,7 @@
 """Writes the Android launcher icon from the ROM's cartridge banner icon.
 
 usage: gen-android-icon.py [rom.nds or unpacked folder]
-       (default: assets/eu, else dq9.nds, in the repo root)
+       (default: assets/YDQP, else dq9.nds, in the repo root)
 
 The icon is the ROM's, so it is generated, never committed: this writes
 android/app/icon-res/mipmap-xxxhdpi/ic_launcher_foreground.png, the layer
@@ -50,7 +50,7 @@ def main():
     if len(sys.argv) > 1:
         rom_path = sys.argv[1]
     else:
-        rom_path = os.path.join(ROOT, "assets", "eu")
+        rom_path = os.path.join(ROOT, "assets", "YDQP")
         if not os.path.isdir(rom_path):
             rom_path = os.path.join(ROOT, "dq9.nds")
     px = banner_icon(banner_image(rom_path))
