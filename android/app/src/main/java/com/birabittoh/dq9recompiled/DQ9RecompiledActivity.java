@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Surface;
 
 import androidx.browser.customtabs.CustomTabsIntent;
 
@@ -14,14 +15,65 @@ import org.libsdl.app.SDLActivity;
  * Thin wrapper around SDL3's SDLActivity that names the native libraries to
  * load: SDL3 itself, then the runner built as a shared library (it holds
  * SDL_main). The self-updater reaches this activity over JNI for the
- * FileProvider and the package installer intent.
+ * FileProvider and the package installer intent, and the frontend for the
+ * second display of dual-screen handhelds (SecondDisplay).
  */
 public class DQ9RecompiledActivity extends SDLActivity {
+
+    private SecondDisplay secondDisplay;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         initDiscord(this);
         super.onCreate(savedInstanceState);
+    }
+
+    // Registered by the runner (ndsrecomp/runner/src/android_second_display.cpp)
+    // before it calls startSecondDisplay(), so never called before that.
+    static native void nativeSecondDisplaySurface(Surface surface, int width, int height);
+    static native void nativeSecondDisplayTouch(int action, float x, float y,
+                                                int width, int height);
+
+    /** From the runner's thread: look for a second panel for the bottom screen. */
+    public void startSecondDisplay() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (secondDisplay == null)
+                    secondDisplay = new SecondDisplay(DQ9RecompiledActivity.this);
+                secondDisplay.start();
+            }
+        });
+    }
+
+    /** From the runner's thread, as it shuts down. */
+    public void stopSecondDisplay() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (secondDisplay != null) secondDisplay.stop();
+            }
+        });
+    }
+
+    @Override
+    protected void onPause() {
+        // Before SDL hears of it: the runner still has to let go of the
+        // second display's surface.
+        if (secondDisplay != null) secondDisplay.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (secondDisplay != null) secondDisplay.onResume();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (secondDisplay != null) secondDisplay.stop();
+        super.onDestroy();
     }
 
     /**
