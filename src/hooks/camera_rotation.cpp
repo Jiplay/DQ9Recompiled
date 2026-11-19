@@ -4,10 +4,15 @@
 // Off leaves the game untouched; L+R still resets the camera. See
 // config/hooks/dq9_arm9.toml for the guest code.
 //
-// Camera buttons (Game > Camera buttons, [title] camera_buttons, off by
-// default): two on-screen buttons (ndsrecomp runner/src/touch_buttons.h)
-// turn the camera without a pad. They hold L and R, halfway down the left
-// and right edges of the top screen, shown while the field is being walked.
+// Extra buttons (Controls > Extra buttons, [title] camera_buttons, off by
+// default): on-screen buttons (ndsrecomp runner/src/touch_buttons.h) for
+// play without a pad. Two hold L and R to turn the camera, halfway down the
+// left and right edges of the top screen, and one holds B to emote, at the
+// bottom center (a latch: B stays down, and a tap on an emote on the
+// touchscreen presses its D-pad direction), all shown while the field is
+// being walked (a turn button hides while the camera is at its limit that
+// way, with the rotation locked). The runner's fast-forward toggle shows at the top center
+// whenever the option is on.
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -36,9 +41,9 @@ const int kUnlockRotationId = nds_title_setting_register(&kUnlockRotation);
 
 constexpr NdsTitleSetting kCameraButtons = {
     "camera_buttons",
-    "Camera buttons",
-    "Shows on-screen arrows that turn the field camera, for play without "
-    "a pad.",
+    "Extra buttons",
+    "Shows on-screen buttons that turn the field camera, emote and fast "
+    "forward, for play without a pad.",
     0, 1, 1,
     kChoices, sizeof(kChoices) / sizeof(kChoices[0]), nullptr,
     0,
@@ -66,7 +71,66 @@ bool FieldWalk() {
            !dq9::FullScreenPage() && (bus_read_u32(kDispcntA) & kBg2Bg3) == 0;
 }
 
+// Whether B would start the emote mode now: the tests of 0x02199F08 (run
+// by the field's step 0x0218CBD4, overlay 11 in slot 1), on the field
+// (0x0218B5B0: the word at 0x021D82E0 + 4) and the hero (ctx 0x020F33D8
+// entity, index byte ctx + 14716). Off with a menu or a message up, while
+// talking or in an event, and once the emote mode is on.
+constexpr uint32_t kCtx = 0x020F33D8;
+
+bool InMainRam(uint32_t address, uint32_t size) {
+    return address >= 0x02000000u && address + size <= 0x02400000u;
+}
+
+bool InDtcm(uint32_t address, uint32_t size) {
+    return address >= 0x027E0000u && address + size <= 0x027E4000u;
+}
+
+bool EmoteReady() {
+    if (dq9::LoadedOverlay(1) != 11) return false;
+    const uint32_t field = bus_read_u32(0x021D82E0 + 4);
+    if (!InMainRam(field, 16516)) return false;
+    // The field's input state (0x02046B18) is idle, no emote mode yet.
+    const uint32_t state = bus_read_u32(field + 14076);
+    if (!InMainRam(state, 4) || bus_read_u32(state) != 0) return false;
+    if (bus_read_u32(field + 16512) != 0) return false;
+    const uint8_t index = bus_read_u8(kCtx + 14716);
+    if (index >= 233) return false;
+    const uint32_t hero = bus_read_u32(kCtx + 8 + 4u * index);
+    if (!InMainRam(hero, 612)) return false;
+    return (bus_read_u32(hero + 196) & 0x7FFF) == 0 &&  // 0x0203403C
+           bus_read_u32(hero + 608) == 0xFFFFFFFFu &&    // no emote
+           bus_read_u8(hero + 594) != 0 &&               // 0x02039830
+           (bus_read_u32(hero + 396) & 1) == 0 &&
+           static_cast<int8_t>(bus_read_u8(hero + 380)) <= 0 &&  // 0x020535D8
+           (bus_read_u32(hero + 172) & 0xFFFF) == 0;
+}
+
+// The camera's yaw limits, with the rotation locked: the field camera
+// (ctx 0x020F33D8 + 0x3B0, 0x020100CC; it lives in DTCM, at 0x027E0000)
+// keeps its yaw at +0x70 (0x0202E800),
+// in [0, 25736), and 0x020A213C clamps one landing in the band
+// (0xC91, 0x57F7) to its edge: L, which adds, stops at 0xC91 and R at
+// 0x57F7. Halfway round tells which edge a yaw in the band is at.
+constexpr int32_t kYawLeftEdge = 0xC91;
+constexpr int32_t kYawRightEdge = 0x57F7;
+constexpr int32_t kYawHalf = 25736 / 2;
+
+enum : uint8_t { kAtLeftLimit = 1, kAtRightLimit = 2 };
+
+uint8_t CameraAtLimit() {
+    if (nds_title_setting_value(kUnlockRotationId)) return 0;
+    const uint32_t camera = bus_read_u32(kCtx + 0x3B0);
+    if (!InDtcm(camera, 0x74)) return 0;
+    const int32_t yaw = static_cast<int32_t>(bus_read_u32(camera + 0x70));
+    if (yaw >= kYawLeftEdge && yaw < kYawHalf) return kAtLeftLimit;
+    if (yaw <= kYawRightEdge && yaw >= kYawHalf) return kAtRightLimit;
+    return 0;
+}
+
 std::atomic<bool> g_field_at_swap{false};
+std::atomic<uint8_t> g_camera_limit_at_swap{0};
+std::atomic<bool> g_emote_ready_at_swap{false};
 std::atomic<uint32_t> g_swaps{0};
 
 // On the frontend thread, once per frame. The sample only holds while 3D
@@ -105,6 +169,19 @@ bool CameraButtonsShown() {
     return now - held_since >= kSettle;
 }
 
+bool TurnLeftShown() {
+    return CameraButtonsShown() &&
+           !(g_camera_limit_at_swap.load(std::memory_order_relaxed) &
+             kAtLeftLimit);
+}
+
+bool TurnRightShown() {
+    return CameraButtonsShown() &&
+           !(g_camera_limit_at_swap.load(std::memory_order_relaxed) &
+             kAtRightLimit);
+}
+
+constexpr uint16_t kKeyB = 1u << 1;
 constexpr uint16_t kKeyR = 1u << 8;
 constexpr uint16_t kKeyL = 1u << 9;
 
@@ -122,7 +199,7 @@ const NdsTouchButtonSpec kTurnLeft = {
     },
     NdsTouchButtonPlace::LeftMiddle,
     kKeyL,
-    CameraButtonsShown,
+    TurnLeftShown,
 };
 
 const NdsTouchButtonSpec kTurnRight = {
@@ -139,18 +216,98 @@ const NdsTouchButtonSpec kTurnRight = {
     },
     NdsTouchButtonPlace::RightMiddle,
     kKeyR,
-    CameraButtonsShown,
+    TurnRightShown,
 };
 
-const bool kButtonsRegistered = (nds_touch_button_register(&kTurnLeft),
-                                 nds_touch_button_register(&kTurnRight), true);
+// Holding B in the field (0x02199F08 starts the emote mode) brings up the
+// emote panel on the touchscreen, and with B held a D-pad press performs
+// one at once (the hero's step 0x02037D98: up, left, right, then down).
+// The panel's four rows (0x0219A388; tables at 0x021D6448..) are 2 tiles
+// high, a cross in the lower half of the screen, in tiles:
+//   up    x 9,  y 17, 14 wide      left  x 2,  y 19, 14 wide
+//   right x 16, y 19, 14 wide      down  x 8,  y 21, 16 wide
+// A tap presses the direction of the row it hits, else of the nearest
+// row's middle (rows are much wider than high, so height counts more).
+uint16_t EmotePick(int x, int y) {
+    struct Row {
+        int x, y, w;  // DS pixels; 16 high
+        uint16_t key;
+    };
+    static constexpr Row kRows[] = {
+        {72, 136, 112, 1u << 6},   // up
+        {16, 152, 112, 1u << 5},   // left
+        {128, 152, 112, 1u << 4},  // right
+        {64, 168, 128, 1u << 7},   // down
+    };
+    constexpr int kRowHeight = 16;
+    for (const Row& row : kRows)
+        if (x >= row.x && x < row.x + row.w && y >= row.y &&
+            y < row.y + kRowHeight)
+            return row.key;
+    uint16_t best = 0;
+    int best_distance = 0;
+    for (const Row& row : kRows) {
+        const int dx = x - (row.x + row.w / 2);
+        const int dy = (y - (row.y + kRowHeight / 2)) * 4;
+        const int distance = dx * dx + dy * dy;
+        if (!best || distance < best_distance) {
+            best = row.key;
+            best_distance = distance;
+        }
+    }
+    return best;
+}
+
+bool EmoteShown() {
+    return CameraButtonsShown() &&
+           g_emote_ready_at_swap.load(std::memory_order_relaxed);
+}
+
+const NdsTouchButtonSpec kEmote = {
+    {
+        // A smiling face.
+        "...........",
+        "...#####...",
+        "..#.....#..",
+        ".#..#.#..#.",
+        ".#.......#.",
+        ".#.#...#.#.",
+        "..#.###.#..",
+        "...#####...",
+        "...........",
+    },
+    NdsTouchButtonPlace::BottomCenter,
+    kKeyB,
+    EmoteShown,
+    // B stays held after the tap, while an emote is picked on the
+    // touchscreen, which presses its direction.
+    true,
+    EmotePick,
+};
+
+bool FastForwardShown() {
+    return nds_title_setting_value(kCameraButtonsId) != 0;
+}
+
+const bool kButtonsRegistered =
+    (nds_touch_button_register(&kTurnLeft),
+     nds_touch_button_register(&kTurnRight),
+     nds_touch_button_register(&kEmote),
+     nds_touch_button_set_query(nds_touch_button_fast_forward(),
+                                FastForwardShown),
+     true);
 
 }  // namespace
 
 namespace dq9 {
 
 void SampleCameraButtons() {
-    g_field_at_swap.store(FieldWalk(), std::memory_order_relaxed);
+    const bool field = FieldWalk();
+    g_field_at_swap.store(field, std::memory_order_relaxed);
+    g_camera_limit_at_swap.store(field ? CameraAtLimit() : 0,
+                                 std::memory_order_relaxed);
+    g_emote_ready_at_swap.store(field && EmoteReady(),
+                                std::memory_order_relaxed);
     g_swaps.fetch_add(1, std::memory_order_relaxed);
 }
 
