@@ -66,7 +66,8 @@ inline bool InBattle() {
 // mode byte at ctx+4 (ctx = 0x020F33D8, read by 0x0200FBAC). Modes 0, 4, 5
 // and 9 run the game (0x020D6CC4 with overlay 17). Mode 2 is a new game:
 // character creation (0x0218B5FC), then, once the byte at ctx+25556 is set,
-// the game too (the new game's prologue, the Observatory). The boot and title screens run in mode 6.
+// the game too (the new game's prologue, the Observatory). The boot and
+// title screens run in mode 6.
 inline bool GameModeRunning() {
     constexpr uint32_t kCtx = 0x020F33D8;
     switch (bus_read_u8(kCtx + 4)) {
@@ -89,8 +90,9 @@ inline uint32_t FieldObject() {
 
 // A field cutscene: the field runs its actions as tasks queued at
 // field+14076 (0x021A3498 runs the head; byte 0 is the task type,
-// dispatched by 0x021A3544). Story events run as type 4, the 2D prologue
-// as 0x2D; talking to people runs no task. An event also takes the
+// dispatched by 0x021A3544). Story events and a new game's 2D prologue run
+// as type 4, the title's opening as 0x2D (in the title's mode 6); talking
+// to people runs no task. An event also takes the
 // camera off the hero: the field camera (ctx 0x020F33D8 + 0x3B0, in DTCM)
 // follows the hero (0x020A213C) only while its word +568 is set.
 inline bool FieldCutscene() {
@@ -108,6 +110,11 @@ inline bool FieldCutscene() {
     const uint8_t type = bus_read_u8(head);
     return type == 4 || type == 0x2D;
 }
+
+// A new game's opening: the main loop's mode 2 (see GameModeRunning), from
+// character creation through the 2D prologue (its lines shown one at a
+// time through the 2D message window) to the Observatory.
+inline bool NewGameOpening() { return bus_read_u8(0x020F33D8 + 4) == 2; }
 
 // The battle records pages (see FullScreenPage), with the Alchenomicon
 // and the accolade popup (below). The battle records (camp

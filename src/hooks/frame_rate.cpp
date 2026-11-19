@@ -50,7 +50,8 @@
 // whole window on every pass, which at 60 FPS still cost about 2 ms a frame
 // on that host. Dq9TextWindowHalfRate skips that redraw on every other pass
 // of the main loop, so the window is redrawn 30 times a second as in the
-// original while 3D stays at 60 (except while a choice list is shown).
+// original while 3D stays at 60 (except while a choice list is shown, and
+// in a new game's opening).
 //
 // The hooks that only do the guest's work natively (heap lookup, kerning,
 // 4bpp blit, GXFIFO send, geometry command buffer, box-test wait) run in
@@ -61,6 +62,8 @@
 #include "io.h"
 #include "title_hooks.h"
 #include "title_settings.h"
+
+#include "dq9_scene.h"
 
 namespace {
 
@@ -123,12 +126,15 @@ NDS_TITLE_HOOK void Dq9FrameRate(uint32_t* r0, uint32_t* r7) {
 // pass (16 ms) late. While a choice list is shown the block runs on every
 // pass, since it places the hand cursor (a sprite) and skipping it made the
 // cursor vanish on every other frame; on those passes only the tile upload is
-// skipped (Dq9TextWindowSkipUpload).
+// skipped (Dq9TextWindowSkipUpload). A new game's opening also runs it on
+// every pass: its 2D prologue shows its lines through this window, and with
+// the block skipped every other pass most of them never appeared.
 NDS_TITLE_HOOK bool Dq9TextWindowHalfRate(uint32_t* r2, uint32_t* r10,
                                           uint32_t* lr) {
     g_skip_tile_upload = false;
     if (*lr != kMainLoopTextDraw) return false;
-    if (!Draw60() || *r2 == 0u || g_text_window_skipped) {
+    if (!Draw60() || *r2 == 0u || g_text_window_skipped ||
+        dq9::NewGameOpening()) {
         g_text_window_skipped = false;
         return false;
     }

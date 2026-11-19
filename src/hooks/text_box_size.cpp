@@ -77,11 +77,11 @@ constexpr int kAnchorY = 96;
 // leave her behind.
 using dq9::FullScreenPage;
 
-// Only in the game proper (field, battle, camp menu). The boot sequence and
-// the title menu draw their art on the same BGs and are left as on the DS.
-// dq9::GameModeRunning tells the game's main loop modes from the boot and
-// title screens' (mode 6). Overlay 17 itself is already loaded on the title, so it cannot tell them
-// apart.
+// Only in the game proper (field, battle, camp menu, a new game's prologue).
+// The boot sequence and the title menu draw their art on the same BGs and
+// are left as on the DS. dq9::GameModeRunning tells the game's main loop
+// modes from the boot and title screens' (mode 6). Overlay 17 itself is
+// already loaded on the title, so it cannot tell them apart.
 //
 // Continue sets mode 0 at once, but the title's fade-out still runs from
 // overlay 4 after that, so the game also needs the title's overlay 4 gone
