@@ -62,6 +62,39 @@ inline bool InBattle() {
     return (bus_read_u16(kPowcnt1) & kEngineAOnTop) != 0;
 }
 
+// The field (map walking, towns, dungeons, the field's events) runs from
+// overlay 17 in slot 2, at 0x0218B5A0; its main object is the word at
+// 0x021D82E0 + 4 (0x0218B5B0). The battle keeps it loaded.
+inline bool FieldLoaded() { return LoadedOverlay(2) == 17; }
+
+inline uint32_t FieldObject() {
+    const uint32_t field = bus_read_u32(0x021D82E0 + 4);
+    return field >= 0x02000000u && field + 0x4400u <= 0x02400000u ? field
+                                                                  : 0;
+}
+
+// A field cutscene: the field runs its actions as tasks queued at
+// field+14076 (0x021A3498 runs the head; byte 0 is the task type,
+// dispatched by 0x021A3544). Story events run as type 4, the 2D prologue
+// as 0x2D; talking to people runs no task. An event also takes the
+// camera off the hero: the field camera (ctx 0x020F33D8 + 0x3B0, in DTCM)
+// follows the hero (0x020A213C) only while its word +568 is set.
+inline bool FieldCutscene() {
+    if (!FieldLoaded()) return false;
+    const uint32_t camera = bus_read_u32(0x020F33D8 + 0x3B0);
+    if (camera >= 0x027E0000u && camera + 572u <= 0x027E4000u &&
+        bus_read_u32(camera + 568) == 0)
+        return true;
+    const uint32_t field = FieldObject();
+    if (!field) return false;
+    const uint32_t queue = bus_read_u32(field + 14076);
+    if (queue < 0x02000000u || queue + 4u > 0x02400000u) return false;
+    const uint32_t head = bus_read_u32(queue);
+    if (head < 0x02000000u || head + 1u > 0x02400000u) return false;
+    const uint8_t type = bus_read_u8(head);
+    return type == 4 || type == 0x2D;
+}
+
 // The battle records pages (see FullScreenPage), with the Alchenomicon
 // and the accolade popup (below). The battle records (camp
 // menu > Battle records, overlay 8 in slot 1; the field and the camp menu have overlay 11 there) fill engine A

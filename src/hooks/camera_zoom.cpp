@@ -11,8 +11,9 @@
 // the main screen is shown at, so the characters keep the size they have in
 // the default 2x window and a bigger window shows more around them.
 //
-// It applies to every scene that uses the main 3D camera: field, towns,
-// dungeons, battles and cutscenes. The far plane is not moved, so very
+// It applies while walking around: field, towns and dungeons. Battles,
+// field cutscenes and the full-screen pages keep the game's own distance
+// (see TargetCameraDistancePermille). The far plane is not moved, so very
 // distant scenery can clip sooner when zoomed out.
 //
 // Moving the camera back also costs depth precision: Z-buffer depth goes as
@@ -27,6 +28,7 @@
 // it would have had at 100%.
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 
 #include "title_hooks.h"
 #include "title_settings.h"
@@ -83,19 +85,11 @@ constexpr int kAutoMaxPermille = 4000;
 // frames one model (Stella, the monster, the character) beside the 2D
 // layout: moving it back shrinks the model toward the screen centre, away
 // from the place the page keeps for it.
-// In battle the distance is capped at 200%.
-constexpr int kBattleMaxPermille = 2000;
-
-int RawCameraDistancePermille();
-
-int CameraDistancePermille() {
-    const int permille = RawCameraDistancePermille();
-    return dq9::InBattle() ? std::min(permille, kBattleMaxPermille)
-                           : permille;
-}
-
-int RawCameraDistancePermille() {
-    if (dq9::FullScreenPage()) return 1000;
+// Battles and field cutscenes (dq9::FieldCutscene: story events, whose
+// camera the script frames) stay at 1000 as well: the zoom is for walking
+// around.
+int TargetCameraDistancePermille() {
+    if (dq9::FieldCutscene()) return 1000;
     if (nds_title_setting_value(kCameraModeId) == kManual)
         return std::max(nds_title_setting_value(kCameraDistanceId), 1000);
     const int points = nds_title_display_height();
@@ -107,6 +101,40 @@ int RawCameraDistancePermille() {
            : permille > kAutoMaxPermille ? kAutoMaxPermille
                                          : permille;
 }
+
+// The distance follows its target smoothly, so the camera glides in when
+// an event starts and back out when it ends, and with the mouse wheel.
+// Battles and full-screen pages switch at once: their scenes start on a
+// camera of their own, which must not open zoomed out.
+constexpr double kEaseSeconds = 0.2;  // time constant
+
+double g_permille = 1000;
+
+// Once per camera build, at its first hook (Dq9CameraDistanceNear), so the
+// near plane, the dolly and the fog of a frame all use the same distance.
+void UpdateCameraDistance() {
+    using Clock = std::chrono::steady_clock;
+    static Clock::time_point last{};
+    static bool last_instant = true;
+    const Clock::time_point now = Clock::now();
+    const double dt = std::chrono::duration<double>(now - last).count();
+    last = now;
+    const bool instant = dq9::InBattle() || dq9::FullScreenPage();
+    if (instant) {
+        g_permille = 1000;
+    } else {
+        const int target = TargetCameraDistancePermille();
+        if (last_instant || dt <= 0 || dt > 1.0) {
+            g_permille = target;
+        } else {
+            g_permille += (target - g_permille) * (1 - std::exp(-dt / kEaseSeconds));
+            if (std::fabs(target - g_permille) < 1) g_permille = target;
+        }
+    }
+    last_instant = instant;
+}
+
+int CameraDistancePermille() { return static_cast<int>(std::lround(g_permille)); }
 
 // Frame offsets in 0x0202E0B4 (sub sp, sp, #0x150 after push {r3-r5, lr}).
 constexpr uint32_t kPositionOffset = 0xFC;
@@ -185,6 +213,7 @@ double OriginalNear(double moved, double k, double target) {
 // projection with the near plane moved out with the camera (see
 // MovedNear). The far plane and the field of view are the game's.
 NDS_TITLE_HOOK void Dq9CameraDistanceNear(uint32_t* r3, uint32_t* r4) {
+    UpdateCameraDistance();
     const int permille = CameraDistancePermille();
     if (permille <= 1000) return;
     const double k = permille / 1000.0;
