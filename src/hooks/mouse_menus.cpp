@@ -889,8 +889,13 @@ NDS_TITLE_HOOK void Dq9MessageTopClick(uint32_t* held) {
     else if (still < 1000) ++still;
     last_box = messages;
     last_pos = pos;
+    // Not on the battle records pages: Stella's box there waits in state 3
+    // too (once B, with Skip text, has printed her line at once), and the
+    // page reads A / X (choose) before B (back), so the A would turn B into
+    // a choice.
     if (box_up && right_click && !Dq9ChoiceListActive() &&
-        bus_read_u32(messages + 2464u) == 3u && still >= 8)
+        bus_read_u32(messages + 2464u) == 3u && still >= 8 &&
+        !dq9::RecordsPage())
         *held |= 1u;  // A
     if (g_msg_click_seen == g_msg_click_used) return;
     g_msg_click_used = g_msg_click_seen;
