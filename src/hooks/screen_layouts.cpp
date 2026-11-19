@@ -4,8 +4,9 @@
 //
 // The title screen (dq9::TitleScreen: the boot logos, the menu and the
 // fade-out after Continue) uses both screens, so it is shown as on the DS,
-// the top screen above the touchscreen. Add a mode to Wanted() to give it
-// the same layout.
+// the top screen above the touchscreen. So are the story movies, which play
+// on both screens too (dq9::MoviePlaying). Add a mode to Wanted() to give
+// it the same layout.
 //
 // In battle the second screen stays below the main one in a portrait window,
 // where the overworld and the other scenes put it above.
@@ -28,17 +29,25 @@ constexpr uint8_t kTitleMode = 6;
 std::atomic<bool> g_title_at_swap{false};
 std::atomic<bool> g_battle_at_swap{false};
 
-// Called once per presented frame on the frontend thread.
+// Called once per presented frame on the frontend thread. The movie is read
+// here, not at the swap: it may draw no 3D, so no swap would see it.
 bool Wanted() {
     return bus_read_u8(kMainMode) == kTitleMode ||
-           g_title_at_swap.load(std::memory_order_relaxed);
+           g_title_at_swap.load(std::memory_order_relaxed) ||
+           dq9::MoviePlaying();
 }
+
+// The story movies keep the two screens a little apart; the title screen
+// keeps them together, as on the DS.
+constexpr int kMovieGap = 16;  // LCD pixels
+int StackedGap() { return dq9::MoviePlaying() ? kMovieGap : 0; }
 
 // Called once per presented frame on the frontend thread. Judged at the swap
 // like the title, since the overlay slots are inconsistent mid-load.
 bool InsetBelow() { return g_battle_at_swap.load(std::memory_order_relaxed); }
 
 const bool kRegistered = (nds_title_set_stacked_layout_query(Wanted),
+                          nds_title_set_stacked_gap_query(StackedGap),
                           nds_title_set_inset_below_query(InsetBelow), true);
 
 }  // namespace

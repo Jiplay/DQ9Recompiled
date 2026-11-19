@@ -45,6 +45,18 @@ inline bool TitleScreen() {
     return title_overlay.load(std::memory_order_relaxed);
 }
 
+// A story movie (data/movie/*.mods) is playing: the field asks for one and
+// the main loop (0x02000C9C) switches to mode 3, which loads the player,
+// overlay 16 ("movieview"), in slot 2 in place of the field's overlay 17,
+// runs it to the end and goes back to mode 0. The mode byte is in main RAM,
+// safe to read from the frontend thread; the overlay slots are not (they
+// read as 0 there on some frames).
+inline bool MoviePlaying() {
+    constexpr uint32_t kMainMode = 0x020F33D8 + 4;
+    constexpr uint8_t kMovieMode = 3;
+    return bus_read_u8(kMainMode) == kMovieMode;
+}
+
 // Samples the scene for the forced screen layouts (screen_layouts.cpp), at a
 // consistent point on the CPU thread: G3_SwapBuffers, from Dq9WindowLayers.
 void SampleScreenLayout();
