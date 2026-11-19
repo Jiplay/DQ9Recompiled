@@ -12,8 +12,10 @@
 // touchscreen presses its D-pad direction), and in its place, while flying
 // the Starflight Express, one holds A to land, all shown while the field is
 // being walked (a turn button hides while the camera is at its limit that
-// way, with the rotation locked). The runner's fast-forward toggle shows at the top center
-// whenever the option is on.
+// way, with the rotation locked, unless the other one is held). Touching
+// both turn buttons at once holds L+R, which recenters the camera as on a
+// pad. The runner's fast-forward toggle shows at the top center whenever
+// the option is on.
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -147,6 +149,8 @@ std::atomic<bool> g_field_at_swap{false};
 std::atomic<bool> g_flight_ready_at_swap{false};
 std::atomic<uint8_t> g_camera_limit_at_swap{0};
 std::atomic<bool> g_emote_ready_at_swap{false};
+// KEYINPUT as the guest sees it (bits low while held).
+std::atomic<uint16_t> g_keys_at_swap{0x03FF};
 std::atomic<uint32_t> g_swaps{0};
 
 // On the frontend thread, once per frame. The sample only holds while 3D
@@ -185,21 +189,29 @@ bool CameraButtonsShown() {
     return now - held_since >= kSettle;
 }
 
+constexpr uint16_t kKeyB = 1u << 1;
+constexpr uint16_t kKeyR = 1u << 8;
+constexpr uint16_t kKeyL = 1u << 9;
+
+bool KeyHeld(uint16_t key) {
+    return (g_keys_at_swap.load(std::memory_order_relaxed) & key) == 0;
+}
+
+// A turn button at its limit still shows while the other is held, so a
+// second finger can land on it for L+R.
 bool TurnLeftShown() {
     return CameraButtonsShown() &&
-           !(g_camera_limit_at_swap.load(std::memory_order_relaxed) &
-             kAtLeftLimit);
+           (!(g_camera_limit_at_swap.load(std::memory_order_relaxed) &
+              kAtLeftLimit) ||
+            KeyHeld(kKeyR));
 }
 
 bool TurnRightShown() {
     return CameraButtonsShown() &&
-           !(g_camera_limit_at_swap.load(std::memory_order_relaxed) &
-             kAtRightLimit);
+           (!(g_camera_limit_at_swap.load(std::memory_order_relaxed) &
+              kAtRightLimit) ||
+            KeyHeld(kKeyL));
 }
-
-constexpr uint16_t kKeyB = 1u << 1;
-constexpr uint16_t kKeyR = 1u << 8;
-constexpr uint16_t kKeyL = 1u << 9;
 
 const NdsTouchButtonSpec kTurnLeft = {
     {
@@ -353,6 +365,7 @@ void SampleCameraButtons() {
                                 std::memory_order_relaxed);
     g_flight_ready_at_swap.store(field && FlightReady(),
                                  std::memory_order_relaxed);
+    g_keys_at_swap.store(bus_read_u16(0x04000130), std::memory_order_relaxed);
     g_swaps.fetch_add(1, std::memory_order_relaxed);
 }
 
