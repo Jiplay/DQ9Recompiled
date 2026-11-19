@@ -54,26 +54,23 @@ const int kCameraButtonsId = nds_title_setting_register(&kCameraButtons);
 
 // ---- camera buttons ---------------------------------------------------------
 
-// The field walk: in game (the main loop's modes as text_box_size.cpp's
-// InGame), not on the title, not in battle, no full-screen page, and no 2D
-// window up on engine A (every one turns BG2 on: the message box, the camp
+// The field walk: in game (dq9::GameModeRunning), not on the title, not in
+// battle or a cutscene (dq9::FieldCutscene: the game's opening, story
+// events, where L and R do nothing), no full-screen page, and no 2D window
+// up on engine A (every one turns BG2 on: the message box, the camp
 // menu; the walk shows BG1 alone). Read at G3_SwapBuffers, where the
 // overlay slots are consistent.
-constexpr uint32_t kMainMode = 0x020F33D8 + 4;
 constexpr uint32_t kDispcntA = 0x04000000;
 constexpr uint32_t kBg2Bg3 = 0x0C00;
 
 bool FieldWalk() {
-    switch (bus_read_u8(kMainMode)) {
-        case 0: case 4: case 5: case 9: break;
-        default: return false;
-    }
-    return !dq9::TitleScreen() && !dq9::InBattle() &&
-           !dq9::FullScreenPage() && (bus_read_u32(kDispcntA) & kBg2Bg3) == 0;
+    return dq9::GameModeRunning() && !dq9::TitleScreen() && !dq9::InBattle() &&
+           !dq9::FieldCutscene() && !dq9::FullScreenPage() &&
+           (bus_read_u32(kDispcntA) & kBg2Bg3) == 0;
 }
 
 // Whether B would start the emote mode now: the tests of 0x02199F08 (run
-// by the field's step 0x0218CBD4, overlay 11 in slot 1), on the field
+// by the field's step 0x0218CBD4, overlay 17 in slot 2), on the field
 // (0x0218B5B0: the word at 0x021D82E0 + 4) and the hero (ctx 0x020F33D8
 // entity, index byte ctx + 14716). Off with a menu or a message up, while
 // talking or in an event, and once the emote mode is on.
@@ -88,7 +85,7 @@ bool InDtcm(uint32_t address, uint32_t size) {
 }
 
 bool EmoteReady() {
-    if (dq9::LoadedOverlay(1) != 11) return false;
+    if (!dq9::FieldLoaded()) return false;
     const uint32_t field = bus_read_u32(0x021D82E0 + 4);
     if (!InMainRam(field, 16516)) return false;
     // The field's input state (0x02046B18) is idle, no emote mode yet.

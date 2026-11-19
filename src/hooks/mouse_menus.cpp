@@ -498,7 +498,6 @@ NDS_TITLE_HOOK void Dq9MouseMenuEquipCategory(uint32_t* s) {
 namespace {
 
 constexpr uint32_t kCtx = 0x020F33D8u;          // main loop context
-constexpr uint32_t kCtxMode = kCtx + 4u;        // u8
 constexpr uint32_t kCtxPartyEntity = kCtx + 8u; // u32 per slot 0..3
 constexpr uint32_t kCtxLeader = 14716u;         // u8, slot of the leader
 constexpr uint32_t kFieldQueue = 14076u;        // scene queue, head at +0
@@ -531,7 +530,7 @@ int g_raised_x = -1, g_raised_top = 0;
 unsigned FieldBusy(uint32_t field) {
     unsigned why = 0;
     if (field == 0) return 1;
-    if (bus_read_u8(kCtxMode) != 0) why |= 2;
+    if (!dq9::GameModeRunning()) why |= 2;
     if (dq9::TitleScreen()) why |= 4;
     if (dq9::InBattle()) why |= 8;
     // A scene (camp menu, shop, battle...) is queued or running.

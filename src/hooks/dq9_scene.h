@@ -62,6 +62,20 @@ inline bool InBattle() {
     return (bus_read_u16(kPowcnt1) & kEngineAOnTop) != 0;
 }
 
+// The game proper is running: the main loop (0x02000C9C) switches on the
+// mode byte at ctx+4 (ctx = 0x020F33D8, read by 0x0200FBAC). Modes 0, 4, 5
+// and 9 run the game (0x020D6CC4 with overlay 17). Mode 2 is a new game:
+// character creation (0x0218B5FC), then, once the byte at ctx+25556 is set,
+// the game too (the new game's prologue, the Observatory). The boot and title screens run in mode 6.
+inline bool GameModeRunning() {
+    constexpr uint32_t kCtx = 0x020F33D8;
+    switch (bus_read_u8(kCtx + 4)) {
+        case 0: case 4: case 5: case 9: return true;
+        case 2: return bus_read_u8(kCtx + 25556) != 0;
+        default: return false;
+    }
+}
+
 // The field (map walking, towns, dungeons, the field's events) runs from
 // overlay 17 in slot 2, at 0x0218B5A0; its main object is the word at
 // 0x021D82E0 + 4 (0x0218B5B0). The battle keeps it loaded.
