@@ -681,6 +681,26 @@ registers = ["r0", "r1"]
 on_true = "return"
 on_false = "continue"
 
+# Upright billboards that face the camera. NNS G3D runs a model's render
+# commands through the table at 0x020F1E08: BBY (Y-axis billboard) is
+# 0x020B5404, SHP (draw a shape) is 0x020B4BFC (r0 = render state; shape
+# dictionary at +0xDC, index at command byte 1, display list at
+# NNSG3dResShp +8/+12). Some single-quad BBY models (the standing torches in
+# churches) have their quad turned about Y in the model data, so it stands
+# slanted. The first hook marks a BBY node; the second straightens the quad
+# in the next shape's display list before it is sent.
+# Handler: src/hooks/billboard_quads.cpp.
+[[hook]]
+address = 0x020B5404      # function entry, before push {r3-r11, lr}
+mode = "arm"
+name = "Dq9BillboardYNode"
+
+[[hook]]
+address = 0x020B4BFC      # function entry, before push {r4, lr}
+mode = "arm"
+name = "Dq9BillboardShape"
+registers = ["r0"]
+
 # Save: 0x020A9EC8 builds the image (state machine 0x020AAD2C writes it to
 # EEPROM [0x10, 0x6FF4) and the backup copy at 0x8010). Load: 0x020AAF94
 # and 0x020AB324 (from ov31) copy the block back into mgr.
