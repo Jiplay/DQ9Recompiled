@@ -628,10 +628,6 @@ NDS_TITLE_HOOK bool Dq9TopScreenClick(uint32_t* field, uint32_t* kind,
                            x < g_raised_x + kTabWidth && y >= g_raised_top;
     if (idle && (y >= kRowTop || on_raised) && x >= 0 && x / kTabWidth < count)
         hit = x / kTabWidth;
-    std::fprintf(stderr,
-                 "[dq9-top] click #%u xy=%d,%d idle=%d busy=0x%X members=%d -> %d\n",
-                 clicks, x, y, idle ? 1 : 0, busy, count,
-                 hit >= 0 ? members[hit] : -1);
     if (hit < 0) return false;
     *kind = 3u;
     *slot = static_cast<uint32_t>(members[hit]);
