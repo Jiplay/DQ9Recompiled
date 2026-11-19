@@ -46,6 +46,7 @@
 #include <string>
 #include <vector>
 
+#include "dq9_scene.h"
 #include "frontend.h"
 #include "options_model.h"
 #include "save_image.h"
@@ -196,6 +197,18 @@ constexpr uint32_t kVersionWidth = 6u, kVersionHeight = 3u;
 constexpr uint32_t kVersionVram =
     kPageVram + 32u * 24u * 32u - kVersionWidth * kVersionHeight * 32u;
 constexpr int kVersionCellX = 4, kVersionCellY = 6;  // pixels in the window
+// The scene whose panel 212 holds the version line's window (u32, free
+// memory past the main menu's grid array), for the script hook that closes
+// it with the summary.
+constexpr uint32_t kVersionScene = 0x021841C0u;
+// Where the script command 0x02185504 (ov11) returns from closing a panel.
+constexpr uint32_t kVersionCloseReturn = 0x02185544u;
+
+// The Yes/No window of the delete prompt starts at tile row 9, column 26:
+// the main menu's panel (from column 1) stays 25 tiles wide when it is tall
+// enough to reach it.
+constexpr uint32_t kYesNoTop = 9u;
+constexpr uint32_t kNarrowWidth = 25u;
 
 // The quit row's cell, after the version line's, and its string (free
 // memory below the version line's).
@@ -856,7 +869,7 @@ void QueueBuilderCalls(uint32_t scene, uint32_t rows) {
     q.push_back({kFnPanelOpen,
                  {panel, scene, kVersionVram, kVersionX, kVersionY, kVersionWidth,
                   kVersionHeight, 0u, 1u, 0u},
-                 nullptr});
+                 [scene](uint32_t) { bus_write_u32(kVersionScene, scene); }});
 }
 
 }  // namespace
@@ -953,7 +966,38 @@ NDS_TITLE_HOOK void Dq9SaveRowLayout(uint32_t* r1, uint32_t* r5, uint32_t* r7,
     bus_write_u16(grid + kGridCol, 0u);
     bus_write_u32(grid + kGridRedraw, 1u);
 
+    // A panel that reaches the Yes/No window's rows (from tile row 9, at
+    // column 26: the delete prompt's) stops short of its column: the two
+    // windows' translucent backgrounds would blend into black where they
+    // overlap. The game's widths (27 to 30 tiles, by language) were sized for
+    // the WFC row's text; the rows left fit in 25.
+    const uint32_t panel_top = bus_read_u32(*sp);
+    if (panel_top + height > kYesNoTop && *r7 > kNarrowWidth) {
+        *r7 = kNarrowWidth;
+        bus_write_u32(*sp + 4u, kNarrowWidth);
+    }
     const uint32_t old_height = bus_read_u32(*sp + 8u);
     bus_write_u32(*sp + 8u, height);
     *r5 += *r7 * (height - old_height) * 32u;
+}
+
+// After the script command 0x02185504 closed a panel (r4) with
+// 0x021F8120: when it was the save summary (211), as before the delete
+// prompt, whose message window covers the bottom of the screen, also close
+// the version line's window (212), which would overlap it. True: call *r12
+// (the hook jumps to a `bx r12` in ov11) with lr = this instruction, which
+// runs the hook again once the window is closed; then false.
+NDS_TITLE_HOOK bool Dq9VersionLineClose(uint32_t* r0, uint32_t* r4,
+                                        uint32_t* r12, uint32_t* lr) {
+    if (g_menu.open || !dq9::TitleScreen()) return false;
+    const uint32_t scene = bus_read_u32(kVersionScene);
+    if (scene < 0x02000000u || scene >= 0x02400000u ||
+        FindTyped(scene, kFileInfoPanel, kTypePanel) != *r4)
+        return false;
+    const uint32_t panel = FindTyped(scene, kPagePanel, kTypePanel);
+    if (!panel || !(bus_read_u8(panel + kPanelWindowOpen) & 1u)) return false;
+    *r0 = panel;
+    *r12 = kFnPanelClose;
+    *lr = kVersionCloseReturn;
+    return true;
 }

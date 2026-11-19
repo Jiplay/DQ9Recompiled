@@ -92,7 +92,9 @@ jump_address = 0x0216FA40 # bx r12
 # out (save row above Options, the update row when there is one and the
 # quit row at the bottom, cell +0x3C y), points the grid at them and makes
 # the panel taller to fit them: 6 tiles for three rows, 8 for four, 10 for
-# five, 11 for six (rows 1 to 11, clear of the summary from row 12).
+# five, 11 for six (rows 1 to 11, clear of the summary from row 12). A
+# panel past row 8 is also narrowed to 25 tiles ([sp+4] and r7), clear of
+# the delete prompt's Yes/No window (from row 9, column 26).
 [[hook]]
 address = 0x0216CEDC      # bl 0x021F7EB8 (rows 1)
 mode = "arm"

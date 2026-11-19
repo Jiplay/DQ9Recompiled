@@ -1,0 +1,20 @@
+# The title's version line (src/hooks/options_row.cpp) closes with the save
+# summary. The script command 0x02185504 closes a panel (r4) with
+# 0x021F8120; when that is the summary (211), as before the delete prompt,
+# whose message window covers the bottom of the screen, the hook also closes
+# panel 212, the version line's window in the bottom-left corner, which
+# would overlap it. It calls 0x021F8120 through the `bx r12` of 0x021845F8
+# with lr = the hooked return site, which runs the hook again.
+version = 1
+
+[program]
+bank = "dq9_arm9_ov011"
+sha1 = "4c3450f63eef2ebf4f9ee3a71820d9ea5fa7428b"
+
+[[hook]]
+address = 0x02185544      # mov r0, #1 (after bl 0x021F8120; r4 = the panel)
+mode = "arm"
+name = "Dq9VersionLineClose"
+registers = ["r0", "r4", "r12", "lr"]
+on_true = "jump"
+jump_address = 0x021845FC # bx r12
