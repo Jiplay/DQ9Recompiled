@@ -9,7 +9,8 @@
 // play without a pad. Two hold L and R to turn the camera, halfway down the
 // left and right edges of the top screen, and one holds B to emote, at the
 // bottom center (a latch: B stays down, and a tap on an emote on the
-// touchscreen presses its D-pad direction), all shown while the field is
+// touchscreen presses its D-pad direction), and in its place, while flying
+// the Starflight Express, one holds A to land, all shown while the field is
 // being walked (a turn button hides while the camera is at its limit that
 // way, with the rotation locked). The runner's fast-forward toggle shows at the top center
 // whenever the option is on.
@@ -128,7 +129,25 @@ uint8_t CameraAtLimit() {
     return 0;
 }
 
+// Flying the Starflight Express: the sky is map 10100 (the current map id
+// at 0x020FB3F0, as the Discord activity reads it; the sea is 10000).
+// There A lands and B (or any tap on the touchscreen) asks to go inside
+// the train, so without a pad there is no way down. Shown while the
+// field's input state is idle, as for EmoteReady: not with the "go
+// inside?" prompt or an event up.
+constexpr uint32_t kMapId = 0x020FB3F0;
+constexpr uint16_t kSkyMap = 10100;
+
+bool FlightReady() {
+    if (bus_read_u16(kMapId) != kSkyMap) return false;
+    const uint32_t field = bus_read_u32(0x021D82E0 + 4);
+    if (!InMainRam(field, 16516)) return false;
+    const uint32_t state = bus_read_u32(field + 14076);
+    return InMainRam(state, 4) && bus_read_u32(state) == 0;
+}
+
 std::atomic<bool> g_field_at_swap{false};
+std::atomic<bool> g_flight_ready_at_swap{false};
 std::atomic<uint8_t> g_camera_limit_at_swap{0};
 std::atomic<bool> g_emote_ready_at_swap{false};
 std::atomic<uint32_t> g_swaps{0};
@@ -285,6 +304,32 @@ const NdsTouchButtonSpec kEmote = {
     EmotePick,
 };
 
+bool LandShown() {
+    return CameraButtonsShown() &&
+           g_flight_ready_at_swap.load(std::memory_order_relaxed);
+}
+
+constexpr uint16_t kKeyA = 1u << 0;
+
+// In the emote button's place, which never shows in the sky.
+const NdsTouchButtonSpec kLand = {
+    {
+        // An arrow down onto the ground.
+        "...........",
+        ".....#.....",
+        ".....#.....",
+        ".....#.....",
+        "...#####...",
+        "....###....",
+        ".....#.....",
+        "...........",
+        ".#########.",
+    },
+    NdsTouchButtonPlace::BottomCenter,
+    kKeyA,
+    LandShown,
+};
+
 bool FastForwardShown() {
     return nds_title_setting_value(kCameraButtonsId) != 0;
 }
@@ -293,6 +338,7 @@ const bool kButtonsRegistered =
     (nds_touch_button_register(&kTurnLeft),
      nds_touch_button_register(&kTurnRight),
      nds_touch_button_register(&kEmote),
+     nds_touch_button_register(&kLand),
      nds_touch_button_set_query(nds_touch_button_fast_forward(),
                                 FastForwardShown),
      true);
@@ -308,6 +354,8 @@ void SampleCameraButtons() {
                                  std::memory_order_relaxed);
     g_emote_ready_at_swap.store(field && EmoteReady(),
                                 std::memory_order_relaxed);
+    g_flight_ready_at_swap.store(field && FlightReady(),
+                                 std::memory_order_relaxed);
     g_swaps.fetch_add(1, std::memory_order_relaxed);
 }
 
