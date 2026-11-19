@@ -12,3 +12,18 @@ address = 0x0215CE84      # mov r5, r0 (r0 = battle)
 mode = "arm"
 name = "Dq9BattleMultiplierSnapshot"
 registers = ["r0"]
+
+# Battle targets on the top screen (handler src/hooks/battle_targets.cpp):
+# the target step 0x0217B380 (a command's state 14) takes the list widget's
+# entry as the target slot, then chooses it on a new A.
+[[hook]]
+address = 0x0217B3B4      # mov r4, r0 (r0 = target slot from the widget)
+mode = "arm"
+name = "Dq9BattleTargetSlot"
+registers = ["r0"]
+
+[[hook]]
+address = 0x0217B3C8      # mov r8, r0 (r0 = new A)
+mode = "arm"
+name = "Dq9BattleTargetChoose"
+registers = ["r0"]

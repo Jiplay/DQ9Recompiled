@@ -191,6 +191,10 @@ int g_choice_hover_x = 0, g_choice_hover_y = 0;
 // message box under it waits in its own states, so a right click or B that
 // advances the box (an advance flag, or an injected A) would answer the list
 // with its first entry. Used by text_instant.cpp and Dq9MessageTopClick.
+// The setting, for the battle's target choice (battle_targets.cpp), whose
+// hover follows it too.
+bool Dq9MouseFriendlyMenus() { return Enabled(); }
+
 bool Dq9ChoiceListActive() {
     return std::chrono::steady_clock::now() - g_choice_seen <
            std::chrono::milliseconds(150);
