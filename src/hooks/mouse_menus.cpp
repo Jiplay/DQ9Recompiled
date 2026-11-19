@@ -246,6 +246,12 @@ namespace {
 // press hook: 0 = leave it alone, 1 = the mouse hover, 2 = a click.
 int g_tap_mode = 0;
 int g_tap_hover_x = 0, g_tap_hover_y = 0;
+// The last press hook ran on the mouse hover (g_tap_mode is reset by the tap
+// routine; the scene's code after it may need to know).
+bool g_tap_was_hover = false;
+// The Defeated Monster List: the hover moved its cursor, so the next frame
+// redraws the other screen (Dq9MouseMenuRecordsRedraw).
+bool g_records_redraw = false;
 }  // namespace
 
 // Before `cmp r1, #0` after the scene reads the press edge (r1). `sp` tells
@@ -256,6 +262,7 @@ int g_tap_hover_x = 0, g_tap_hover_y = 0;
 NDS_TITLE_HOOK void Dq9MouseMenuTapPress(uint32_t* press, uint32_t* sp) {
     g_choice_seen = std::chrono::steady_clock::now();
     g_tap_mode = 0;
+    g_tap_was_hover = false;
     if (!Enabled()) return;
     if (*press != 0u) {
         g_tap_mode = 2;
@@ -264,6 +271,7 @@ NDS_TITLE_HOOK void Dq9MouseMenuTapPress(uint32_t* press, uint32_t* sp) {
     if (!HoverMoved(*sp ^ 0x80000000u, &g_tap_hover_x, &g_tap_hover_y))
         return;
     g_tap_mode = 1;
+    g_tap_was_hover = true;
     *press = 1u;
 }
 
@@ -283,6 +291,21 @@ NDS_TITLE_HOOK void Dq9MouseMenuTapChoose(uint32_t* flags) {
     else if (g_tap_mode == 2)
         *flags |= 4u;
     g_tap_mode = 0;
+}
+
+// The Defeated Monster List (battle records): see
+// config/hooks/dq9_arm9_ov014.toml. At 0x02186FC4 the pen step has moved the
+// cursor; on the hover, the next frame redraws the info as the keypad does.
+NDS_TITLE_HOOK void Dq9MouseMenuRecordsMoved() {
+    if (g_tap_was_hover) g_records_redraw = true;
+}
+
+// Before `cmps rN, #0` on s+0x160 (what the keypad step did this frame): non
+// zero redraws the other screen (no page bits, 0x10 / 0x20, are added).
+NDS_TITLE_HOOK void Dq9MouseMenuRecordsRedraw(uint32_t* flags) {
+    if (!g_records_redraw) return;
+    g_records_redraw = false;
+    if (*flags == 0u) *flags = 1u;
 }
 
 // Character creation: see config/hooks/dq9_arm9_ov009.toml.
