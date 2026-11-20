@@ -118,31 +118,40 @@ def cmake_path(path):
     return os.path.abspath(path).replace("\\", "/")
 
 
-def apply_recomp_net_patches():
-    """Applies patches/recomp-net-*.patch to the recomp-net submodule.
+def apply_submodule_patches(prefix, directory):
+    """Applies patches/<prefix>*.patch to the submodule in `directory`.
 
-    Changes we need from recomp-net that it does not have yet. A patch that
-    is already in the tree (a rerun, or a recomp-net that has the change) is
+    Changes we need from a submodule that it does not have yet. A patch that
+    is already in the tree (a rerun, or a submodule that has the change) is
     skipped, so this is safe on every build.
     """
     patch_dir = "patches"
     if not os.path.isdir(patch_dir):
         return
     for name in sorted(os.listdir(patch_dir)):
-        if not (name.startswith("recomp-net-") and name.endswith(".patch")):
+        if not (name.startswith(prefix) and name.endswith(".patch")):
             continue
         patch = os.path.abspath(os.path.join(patch_dir, name))
         already = subprocess.run(
-            ["git", "-C", RECOMP_NET_DIR, "apply", "--check", "--reverse", patch],
+            ["git", "-C", directory, "apply", "--check", "--reverse", patch],
             capture_output=True).returncode == 0
         if already:
             continue
         applied = subprocess.run(
-            ["git", "-C", RECOMP_NET_DIR, "apply", patch], capture_output=True)
+            ["git", "-C", directory, "apply", patch], capture_output=True)
         if applied.returncode != 0:
-            die(f"{name} does not apply to {RECOMP_NET_DIR}/: "
+            die(f"{name} does not apply to {directory}/: "
                 f"{applied.stderr.decode(errors='replace').strip()}")
-        print(f"applied {name} to {RECOMP_NET_DIR}/")
+        print(f"applied {name} to {directory}/")
+
+
+def apply_recomp_net_patches():
+    apply_submodule_patches("recomp-net-", RECOMP_NET_DIR)
+
+
+def apply_ndsrecomp_patches():
+    # macOS link fix and a renderer use-after-free, until ndsrecomp has them.
+    apply_submodule_patches("ndsrecomp-", "ndsrecomp")
 
 
 def check_deps():
@@ -171,6 +180,15 @@ def venv_python():
     if IS_WINDOWS:
         return os.path.join(".venv", "Scripts", "python.exe")
     return os.path.join(".venv", "bin", "python3")
+
+
+def check_python():
+    # The venv is made from this interpreter, and the tools use Python 3.10+
+    # APIs (Path.write_text(newline=...)). macOS's /usr/bin/python3 is 3.9.
+    if sys.version_info < (3, 10):
+        die(f"Python 3.10+ is needed, this is {platform.python_version()} "
+            f"({sys.executable}): run the build with a newer python3 "
+            "(e.g. Homebrew's python3.13), after removing an old .venv")
 
 
 def ensure_venv():
@@ -473,6 +491,7 @@ def main():
     if not all(os.path.exists(path) for path in submodules):
         die("submodules missing: run `git submodule update --init --recursive`")
 
+    apply_ndsrecomp_patches()
     if args.online and not args.recomp_net:
         apply_recomp_net_patches()
 
@@ -480,6 +499,7 @@ def main():
     compilers = find_clang()
 
     if not args.runner_only:
+        check_python()
         python = ensure_venv()
         ensure_rom_folder(python)
         build_banks(args, compilers, python)

@@ -1,0 +1,17 @@
+diff --git a/runner/cmake/NdsPlume.cmake b/runner/cmake/NdsPlume.cmake
+index e4a0631..11bb98f 100644
+--- a/runner/cmake/NdsPlume.cmake
++++ b/runner/cmake/NdsPlume.cmake
+@@ -110,4 +110,12 @@ function(nds_add_plume_renderer target)
+         NDS_HAVE_COMPUTE_RENDERER=1
+         NDS_USE_PLUME=1)
+     target_link_libraries(${target} PRIVATE plume)
++    # Plume leaves the Apple frameworks to the final executable (its
++    # libplume.a no longer links them), so plume_apple.mm and the Metal
++    # backend need them here.
++    if(APPLE)
++        target_link_libraries(${target} PRIVATE
++            "-framework Metal" "-framework QuartzCore" "-framework CoreGraphics"
++            "-framework Foundation" "-framework IOKit")
++    endif()
+ endfunction()

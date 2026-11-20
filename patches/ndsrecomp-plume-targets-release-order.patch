@@ -1,0 +1,48 @@
+diff --git a/runner/src/plume/Plume3D.cpp b/runner/src/plume/Plume3D.cpp
+index d31aea4..656d884 100644
+--- a/runner/src/plume/Plume3D.cpp
++++ b/runner/src/plume/Plume3D.cpp
+@@ -434,6 +434,16 @@ bool create_slots(Renderer& r) {
+     return true;
+ }
+ 
++// Framebuffers hold views of the textures (Vulkan's depth attachment view
++// reads its texture on destruction), so they must go first. A plain
++// `t = Targets{}` move-assigns in declaration order: textures, then
++// framebuffers, a use-after-free on the second resize.
++void release_targets(Targets& t) {
++    t.main.reset();
++    t.final.reset();
++    t = Targets{};
++}
++
+ // Replaces the raster targets. Everything that may still sample the old
+ // output (the presenter's frames, this renderer's own) is drained first.
+ bool resize_targets(Renderer& r, uint32_t width, uint32_t height) {
+@@ -441,7 +451,7 @@ bool resize_targets(Renderer& r, uint32_t width, uint32_t height) {
+     wait_all(r);
+     r.valid = false;
+     Targets& t = r.targets;
+-    t = Targets{};
++    release_targets(t);
+     t.color = device().createTexture(RenderTextureDesc::ColorTarget(width, height, kColorFormat));
+     t.attr = device().createTexture(RenderTextureDesc::ColorTarget(width, height, kAttrFormat));
+     t.depth_copy = device().createTexture(
+@@ -450,7 +460,7 @@ bool resize_targets(Renderer& r, uint32_t width, uint32_t height) {
+     t.output = device().createTexture(
+         RenderTextureDesc::ColorTarget(width, height, kOutputFormat));
+     if (!t.color || !t.attr || !t.depth_copy || !t.depth || !t.output) {
+-        t = Targets{};
++        release_targets(t);
+         return false;
+     }
+     const RenderTexture* main_colors[] = {t.color.get(), t.attr.get(), t.depth_copy.get()};
+@@ -458,7 +468,7 @@ bool resize_targets(Renderer& r, uint32_t width, uint32_t height) {
+     const RenderTexture* final_colors[] = {t.output.get()};
+     t.final = device().createFramebuffer(RenderFramebufferDesc(final_colors, 1));
+     if (!t.main || !t.final) {
+-        t = Targets{};
++        release_targets(t);
+         return false;
+     }
+     t.width = width;
